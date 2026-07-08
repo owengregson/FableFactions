@@ -27,6 +27,30 @@ updates:
       # Load-bearing pinned downgrader plugin (1.3.6) — covers the plugin id
       # and its Gradle plugin-marker artifact.
       - dependency-name: 'xyz.wagyourtail.jvmdowngrader*'
+      # Adventure (net.kyori) — the 4.x line is the last that runs on the Java-8
+      # base tier of the mega-jar; 4.x → 5.x drops Java 8 support (AM-1/AM-10).
+      # Allow 4.x minor/patch (the verifyJdk8Api gate catches any regression),
+      # block the semver-major jump only.
+      - dependency-name: 'net.kyori:*'
+        update-types: ['version-update:semver-major']
+      # slf4j-nop is pinned to the 1.7.x line that the relocated HikariCP 4.0.3
+      # no-op binder expects; slf4j 2.x changes the binding mechanism (ServiceLoader
+      # provider) and breaks the shaded no-op binder. Ignore ALL update types.
+      - dependency-name: 'org.slf4j:slf4j-nop'
+      # JUnit 6 == JUnit Platform 2.x, incompatible with the pinned jqwik 1.9.2
+      # (targets Platform 1.x). Allow 5.x minor/patch, block the semver-major jump.
+      - dependency-name: 'org.junit:junit-bom'
+        update-types: ['version-update:semver-major']
+      # jqwik 1.9.2 is spec-pinned and targets JUnit Platform 1.x; it moves in
+      # lockstep with junit-bom (above). A float to 1.10.x pulls a newer platform
+      # and breaks the coupling — ignore ALL update types.
+      - dependency-name: 'net.jqwik:jqwik'
+      # The Bukkit-facing COMPILE FLOOR is normatively 1.13.2 (ARCHITECTURE §3);
+      # the whole 1.7.10-1.16.5 band is runtime-probed against it. Bumping the
+      # floor artifact raises the compiled API surface (e.g. the 1.16 API adds
+      # CommandSender#sendMessage(UUID, String[]) — a confirmed build break). A
+      # floor change is a deliberate manual decision, never an auto-bump.
+      - dependency-name: 'com.destroystokyo.paper:paper-api'
     groups:
       # Batch low-risk bumps for everything not ignored above.
       gradle-minor-patch:

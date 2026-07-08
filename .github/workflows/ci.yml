@@ -39,12 +39,12 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Temurin 25 matches the build toolchain (max(jdk) in support-matrix.json),
       # so the foojay resolver skips a duplicate build-JDK download.
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
@@ -52,7 +52,7 @@ jobs:
       # main writes the Gradle cache, PRs only read it: no cache poisoning from
       # forks, no eviction churn from short-lived branches.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
@@ -60,7 +60,7 @@ jobs:
       # ~/.gradle/jdks (outside setup-gradle's cache scope). Cache it so every
       # run does not re-download the gate toolchain.
       - name: Cache provisioned toolchains (JDK 8 gate)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/jdks
           key: ${{ runner.os }}-gradle-jdks-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
@@ -69,7 +69,7 @@ jobs:
         run: ./gradlew build --stacktrace
 
       - name: Upload plugin jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FableFactions
           path: core/build/libs/FableFactions-*.jar
@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload test reports (failure only)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: |
@@ -94,17 +94,23 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Best-effort: this job feeds the GitHub dependency graph that powers
+    # Dependabot alerts / dependency review. If the dependency graph is disabled
+    # for the repo (or the submission API is briefly unavailable), the graph is a
+    # security-telemetry nicety, not a build correctness gate — so a failure here
+    # must never turn the CI result red. Re-enabling the graph makes it succeed.
+    continue-on-error: true
     permissions:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
 
       - name: Generate and submit dependency graph
-        uses: gradle/actions/dependency-submission@v4
+        uses: gradle/actions/dependency-submission@v6

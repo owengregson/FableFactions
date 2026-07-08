@@ -237,6 +237,19 @@ final class LifecycleReducer {
                 }
             }
             case FINAL -> {
+                // Re-drain guard (AM-6): a JoinFaction or claim intent can interleave between the
+                // MEMBERS/CLAIMS pages finishing and this FINAL page. Freeing the ordinal with a
+                // late member/claim still attached would leave a stale-generation ghost bound to
+                // whatever faction later reincarnates the ordinal. Loop back and re-scrub until the
+                // sender is fully drained; only then free it.
+                if (sender.landCount() > 0) {
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.CLAIMS, 0, c.actor()));
+                    return;
+                }
+                if (FactionAggregates.memberCount(s.state, c.sender()) > 0) {
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.MEMBERS, 0, c.actor()));
+                    return;
+                }
                 // Final page: move bank, scrub sender, free it, emit MergeCompleted.
                 double bankMoved = MoneyMath.round2(sender.bank());
                 Faction tgt = s.resolve(c.target());
@@ -248,7 +261,7 @@ final class LifecycleReducer {
                         s.state.invites().removeIf(in -> in.factionOrdinal() == senderOrd));
                 s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(senderOrd));
                 s.state = s.state.withChests(s.state.chests().removeFaction(senderOrd));
-                s.refundFactionEscrows(senderOrd);
+                s.scrubFactionEscrows(senderOrd);
                 s.state = s.state.withFactionNames(s.state.factionNames().without(sender.nameFolded()));
                 s.state = s.state.withFactions(s.state.factions().freed(senderOrd));
                 s.emit(new LifecycleEffect.MergeCompleted(s.seq, s.origin, c.sender(), c.target(), 0, 0,
@@ -299,13 +312,26 @@ final class LifecycleReducer {
                 }
             }
             case FINAL -> {
+                // Re-drain guard (AM-6): a JoinFaction or claim intent can interleave between the
+                // CLAIMS/MEMBERS pages finishing and this FINAL page. Freeing the ordinal with a
+                // late member/claim still attached would leave a stale-generation ghost bound to
+                // whatever faction later reincarnates the ordinal. Loop back and re-scrub until the
+                // faction is fully drained; only then free it.
+                if (f.landCount() > 0) {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.CLAIMS, 0, c.byAdmin(), c.actor()));
+                    return;
+                }
+                if (FactionAggregates.memberCount(s.state, c.faction()) > 0) {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.MEMBERS, 0, c.byAdmin(), c.actor()));
+                    return;
+                }
                 // Final page: scrub inbound references, release name, free ordinal (generation bump LAST).
                 s.state = s.state.withFactions(DisbandRules.scrubRelations(s.state.factions(), ord));
                 s.state = s.state.withInvites(s.state.invites().removeIf(in -> in.factionOrdinal() == ord));
                 s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(ord));
                 s.state = s.state.withWarps(s.state.warps().removeFaction(ord));
                 s.state = s.state.withChests(s.state.chests().removeFaction(ord));
-                s.refundFactionEscrows(ord);
+                s.scrubFactionEscrows(ord);
                 s.state = s.state.withFactionNames(s.state.factionNames().without(f.nameFolded()));
                 s.state = s.state.withFactions(s.state.factions().freed(ord));
                 s.emit(new LifecycleEffect.FactionDisbanded(s.seq, s.origin, c.faction(), f.name()));

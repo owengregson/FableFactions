@@ -198,7 +198,13 @@ class ReducerSagaTest {
 
         List<Effect> d = s.apply(new LifecycleIntent.DisbandFaction(fa, true, Kern.player(0)));
         assertEquals(1, Kern.countType(d, LifecycleEffect.FactionDisbanded.class));
-        assertTrue(Kern.countType(d, ExternalEffect.EscrowRefund.class) >= 1, "open escrow refunded");
+        // The open WITHDRAW escrow's payout is already in flight to the player's wallet
+        // (PayoutRequested was emitted when the withdrawal reduced). Disband must NOT emit an
+        // EscrowRefund for it — doing so pays the player twice (finding #1, the disband double-pay
+        // dupe). It is left in flight and self-removes on its own SettleEscrow.
+        assertEquals(0, Kern.countType(d, ExternalEffect.EscrowRefund.class),
+                "in-flight WITHDRAW escrow must not be refunded on disband (double-pay)");
+        assertEquals(1, s.state.escrows().size(), "the in-flight withdraw escrow survives disband");
         assertNull(s.state.factions().resolve(fa), "faction slot freed");
         String dangling = Kern.danglingRefs(s.state, ordA, "alpha");
         assertEquals("", dangling, "no dangling references: " + dangling);

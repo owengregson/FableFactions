@@ -58,7 +58,7 @@ jobs:
       matrix: ${{ steps.select.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           sparse-checkout: support-matrix.json
           sparse-checkout-cone-mode: false
@@ -89,23 +89,23 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix-prep.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Build JDK. The per-lane RUNTIME JDK (matrix.jdk) is auto-provisioned by
       # the foojay toolchain resolver into ~/.gradle/jdks and cached below.
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: true
 
       - name: Cache provisioned toolchains (lane runtime JDK ${{ matrix.jdk }})
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/jdks
           key: ${{ runner.os }}-gradle-jdks-${{ matrix.jdk }}-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
@@ -114,7 +114,7 @@ jobs:
       # ~/.gradle/caches/run-task-jars/<platform>/jars/<version>/ — outside
       # setup-gradle's cache scope, so cache it per platform+version.
       - name: Cache downloaded server jars
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/caches/run-task-jars
           key: run-task-jars-${{ matrix.platform }}-${{ matrix.version }}
@@ -134,9 +134,38 @@ jobs:
           echo "Running runIntegrationTest${SUFFIX}"
           ./gradlew "runIntegrationTest${SUFFIX}" --stacktrace
 
+      # Backstop for false-green lanes. The run-task harness has been observed to
+      # exit 0 even when the server DIES at boot (e.g. the PaperSpigot 1.7.10
+      # timings NPE: Bukkit.getPluginManager() returns null inside
+      # CustomTimingsHandler.startTiming during MinecraftServer boot). A server
+      # that crashed on boot never actually exercised the plugin, so a "passing"
+      # lane would be a lie. Fail the lane whenever the server log carries the
+      # NMS/Bukkit fatal-crash signature. Runs regardless of the gradle exit code
+      # so it catches the exit-0-but-crashed case. (The real fix belongs in the
+      # gradle integration-test harness / probe; this is the observability guard
+      # until that lands — and it is a no-op when the server booted cleanly.)
+      - name: Assert server did not crash (false-green backstop)
+        if: ${{ !cancelled() }}
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          LOG_DIR="run/${PLATFORM}/${VERSION}/logs"
+          if [ ! -d "$LOG_DIR" ]; then
+            echo "No log dir at ${LOG_DIR} — nothing to scan."
+            exit 0
+          fi
+          PATTERN='Encountered an unexpected exception|Failed to start the minecraft server|This crash report has been saved|Exception (initializing|stopping) server'
+          if grep -rIlE "$PATTERN" "$LOG_DIR" >/dev/null 2>&1; then
+            echo "::error::Fatal server-crash signature in ${LOG_DIR} — this lane did NOT truly pass (harness reported success over a dead server)."
+            grep -rInE "$PATTERN" "$LOG_DIR" | head -20 || true
+            exit 1
+          fi
+          echo "No fatal server-crash signature in ${LOG_DIR}."
+
       - name: Upload server logs (failure only)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: server-logs-${{ matrix.platform }}-${{ matrix.version }}
           path: run/${{ matrix.platform }}/${{ matrix.version }}/logs

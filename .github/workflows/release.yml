@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Fail loudly BEFORE spending build minutes: the tag must match the
       # single version home (gradle.properties) exactly.
@@ -38,19 +38,19 @@ jobs:
           echo "Tag $GITHUB_REF_NAME matches gradle.properties version $PROP_VERSION."
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           # A tag ref is never main; read the cache main populated.
           cache-read-only: true
 
       - name: Cache provisioned toolchains (JDK 8 gate)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/jdks
           key: ${{ runner.os }}-gradle-jdks-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
@@ -65,7 +65,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             core/build/libs/FableFactions-*.jar

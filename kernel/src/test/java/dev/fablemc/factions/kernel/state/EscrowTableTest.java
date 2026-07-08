@@ -21,6 +21,7 @@ import dev.fablemc.factions.kernel.vocab.EscrowKind;
 class EscrowTableTest {
 
     private static final int FACTION = 2;
+    private static final int HANDLE = 2;
 
     @Test
     void depositWithdrawAndRefundConserveMoney() {
@@ -33,7 +34,7 @@ class EscrowTableTest {
         // ── Deposit saga: wallet → escrow → bank ─────────────────────────────────────────
         double dep = 30.0;
         wallet -= dep;
-        esc = esc.open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, player, FACTION, dep, 0));
+        esc = esc.open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, player, FACTION, HANDLE,dep, 0));
         assertEquals(total, wallet + bank + esc.openTotal(), 1e-9, "conserved after deposit-open");
         assertTrue(esc.isOpen(1));
 
@@ -46,7 +47,7 @@ class EscrowTableTest {
         // ── Withdraw saga: bank → escrow → wallet ────────────────────────────────────────
         double wd = 20.0;
         bank -= wd;
-        esc = esc.open(new EscrowTable.Escrow(2, EscrowKind.WITHDRAW, player, FACTION, wd, 0));
+        esc = esc.open(new EscrowTable.Escrow(2, EscrowKind.WITHDRAW, player, FACTION, HANDLE,wd, 0));
         assertEquals(total, wallet + bank + esc.openTotal(), 1e-9, "conserved after withdraw-open");
 
         esc = esc.settle(2); // deposit to wallet
@@ -56,7 +57,7 @@ class EscrowTableTest {
         // ── Refund-on-failure: deposit debits wallet, Vault fails, refund wallet ──────────
         double buy = 15.0;
         wallet -= buy;
-        esc = esc.open(new EscrowTable.Escrow(3, EscrowKind.BUY, player, FACTION, buy, 0));
+        esc = esc.open(new EscrowTable.Escrow(3, EscrowKind.BUY, player, FACTION, HANDLE,buy, 0));
         assertEquals(total, wallet + bank + esc.openTotal(), 1e-9, "conserved while buy in flight");
 
         esc = esc.settle(3); // compensating path removes the escrow ...
@@ -70,9 +71,9 @@ class EscrowTableTest {
     void openTotalTracksMultipleConcurrentEscrows() {
         UUID p = UUID.randomUUID();
         EscrowTable esc = EscrowTable.empty()
-                .open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, p, FACTION, 10.0, 0))
-                .open(new EscrowTable.Escrow(2, EscrowKind.WITHDRAW, p, FACTION, 5.5, 0))
-                .open(new EscrowTable.Escrow(3, EscrowKind.BUY, p, FACTION, 4.5, 0));
+                .open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, p, FACTION, HANDLE,10.0, 0))
+                .open(new EscrowTable.Escrow(2, EscrowKind.WITHDRAW, p, FACTION, HANDLE,5.5, 0))
+                .open(new EscrowTable.Escrow(3, EscrowKind.BUY, p, FACTION, HANDLE,4.5, 0));
         assertEquals(3, esc.size());
         assertEquals(20.0, esc.openTotal(), 1e-9);
 
@@ -90,7 +91,7 @@ class EscrowTableTest {
     void cowIsolation() {
         UUID p = UUID.randomUUID();
         EscrowTable base = EscrowTable.empty()
-                .open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, p, FACTION, 10.0, 0));
+                .open(new EscrowTable.Escrow(1, EscrowKind.DEPOSIT, p, FACTION, HANDLE,10.0, 0));
         EscrowTable settled = base.settle(1);
         assertTrue(base.isOpen(1), "old table unchanged by settle");
         assertEquals(10.0, base.openTotal(), 1e-9);

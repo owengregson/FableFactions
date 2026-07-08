@@ -38,6 +38,7 @@ import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.NameIndex;
 import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.RelationEdges;
+import dev.fablemc.factions.kernel.vocab.EscrowKind;
 
 /**
  * Shared test harness for the reducer suite (Wave 2a). Not a test class.
@@ -283,10 +284,14 @@ final class Kern {
         if (st.chests().countForFaction(ordinal) > 0) {
             sb.append("chests ");
         }
-        // escrows
+        // escrows: an INBOUND saga (DEPOSIT/BUY) still targeting the freed ordinal is a genuine
+        // leak — the disband scrub must refund+remove it. A WITHDRAW escrow is NOT dangling: its
+        // payout is already in flight to the player's wallet, it carries a generation-tagged handle
+        // so its settle is identity-safe across ordinal reuse (AM-6), and it self-removes on its own
+        // SettleEscrow within one Vault round-trip — refunding it on disband would double-pay.
         List<Long> esc = new ArrayList<>();
         st.escrows().forEach(e -> {
-            if (e.factionOrdinal() == ordinal) {
+            if (e.factionOrdinal() == ordinal && e.kind() != EscrowKind.WITHDRAW) {
                 esc.add(e.id());
             }
         });

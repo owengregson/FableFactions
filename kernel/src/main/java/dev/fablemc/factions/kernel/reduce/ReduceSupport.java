@@ -28,6 +28,7 @@ import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.PlayerLedger;
 import dev.fablemc.factions.kernel.state.Rank;
+import dev.fablemc.factions.kernel.vocab.EscrowKind;
 import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
 
@@ -288,11 +289,20 @@ final class ReduceSupport {
         return moved;
     }
 
-    void refundFactionEscrows(int factionOrd) {
+    /**
+     * Scrubs the disbanding/merging faction's open escrows (AM-6, AM-7). Only INBOUND sagas
+     * (DEPOSIT/BUY — the player's money is parked pending a bank/power credit that will now never
+     * land) are refunded to the wallet here. A WITHDRAW escrow is left OPEN: its payout is already
+     * in flight to the player's wallet (PayoutRequested was emitted when it opened), so a wallet
+     * refund here would pay the player twice — the classic disband-double-pay dupe. Its own
+     * SettleEscrow closes it: OK simply removes the (now faction-less) row, and FAILED is refunded
+     * to the wallet by the handle-checked {@code settleEscrow} path since the faction is gone.
+     */
+    void scrubFactionEscrows(int factionOrd) {
         EscrowTable escrows = state.escrows();
         ArrayList<EscrowTable.Escrow> toRefund = new ArrayList<>();
         escrows.forEach(e -> {
-            if (e.factionOrdinal() == factionOrd) {
+            if (e.factionOrdinal() == factionOrd && e.kind() != EscrowKind.WITHDRAW) {
                 toRefund.add(e);
             }
         });

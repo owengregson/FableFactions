@@ -22,9 +22,16 @@ import dev.fablemc.factions.kernel.vocab.EscrowKind;
  */
 public final class EscrowTable {
 
-    /** One open escrow. Only open escrows are held; settlement removes the row. */
-    public record Escrow(long id, EscrowKind kind, UUID player, int factionOrdinal, double amount,
-                         long createdAt) {
+    /**
+     * One open escrow. Only open escrows are held; settlement removes the row.
+     *
+     * <p>{@code factionHandle} is the generation-tagged handle captured at open time (AM-6): the
+     * FAILED-settle rollback resolves it, so a WITHDRAW whose faction has since disbanded (or whose
+     * ordinal was reincarnated by a new faction) is refunded to the player's wallet rather than
+     * credited to a stranger's bank. {@code factionOrdinal} stays for the disband/merge scrub scan.
+     */
+    public record Escrow(long id, EscrowKind kind, UUID player, int factionOrdinal, int factionHandle,
+                         double amount, long createdAt) {
     }
 
     private static final Escrow[] NONE = new Escrow[0];

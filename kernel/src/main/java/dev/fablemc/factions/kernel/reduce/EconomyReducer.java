@@ -75,8 +75,9 @@ final class EconomyReducer {
         double balance = MoneyMath.round2(f.bank() - amount);
         s.replaceFaction(FactionEdit.withBank(f, balance));
         long escrowId = s.seq;
+        int factionHandle = s.state.factions().handleOf(f.idx());
         s.state = s.state.withEscrows(s.state.escrows().open(new EscrowTable.Escrow(escrowId,
-                EscrowKind.WITHDRAW, c.actor(), f.idx(), amount, s.epochMillis)));
+                EscrowKind.WITHDRAW, c.actor(), f.idx(), factionHandle, amount, s.epochMillis)));
         s.emit(new EconomyEffect.BankChanged(s.seq, s.origin, c.faction(), -amount, balance,
                 BankTxType.WITHDRAW, c.actor(), ReduceSupport.NO_HANDLE, "Player withdraw"));
         s.emit(new ExternalEffect.PayoutRequested(s.seq, s.origin, escrowId, c.actor(), amount));
@@ -91,14 +92,19 @@ final class EconomyReducer {
         s.state = s.state.withEscrows(s.state.escrows().settle(c.escrowId()));
         if (c.outcome() == EscrowOutcome.FAILED) {
             if (e.kind() == EscrowKind.WITHDRAW) {
-                // Vault deposit failed — re-credit the bank (conservation).
-                Faction f = s.state.factions().at(e.factionOrdinal());
+                // Vault deposit failed — re-credit the bank (conservation). Resolve the ORIGINAL
+                // faction by its generation-tagged handle (AM-6): if it has since disbanded or its
+                // ordinal was reincarnated by a different faction, its bank is gone, so refund the
+                // player's wallet instead of crediting a stranger.
+                Faction f = s.resolve(e.factionHandle());
                 if (f != null) {
                     double balance = MoneyMath.round2(f.bank() + e.amount());
                     s.replaceFaction(FactionEdit.withBank(f, balance));
                     s.emit(new EconomyEffect.BankChanged(s.seq, s.origin,
-                            s.state.factions().handleOf(e.factionOrdinal()), e.amount(), balance,
+                            s.state.factions().handleOf(f.idx()), e.amount(), balance,
                             BankTxType.DEPOSIT, e.player(), ReduceSupport.NO_HANDLE, "Withdraw rollback"));
+                } else {
+                    s.emit(new ExternalEffect.EscrowRefund(s.seq, s.origin, e.id(), e.player(), e.amount()));
                 }
             } else {
                 s.emit(new ExternalEffect.EscrowRefund(s.seq, s.origin, e.id(), e.player(), e.amount()));
