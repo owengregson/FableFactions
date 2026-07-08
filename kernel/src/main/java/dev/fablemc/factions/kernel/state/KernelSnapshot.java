@@ -22,6 +22,9 @@ import dev.fablemc.factions.kernel.ids.FactionHandle;
  */
 public record KernelSnapshot(KernelState state) {
 
+    /** Server ticks per second — the unit of the accrual clock (mirror of PowerMath.TICKS_PER_SECOND). */
+    private static final double TICKS_PER_SECOND = 20.0;
+
     /** Owning faction handle at a chunk, or {@link FactionHandle#WILDERNESS}. Zero allocation. */
     public int claimOwnerAt(int worldIdx, long chunkKey) {
         return state.claims().ownerAt(worldIdx, chunkKey);
@@ -102,8 +105,14 @@ public record KernelSnapshot(KernelState state) {
         if (dt <= 0) {
             return clampedBase;
         }
-        double rate = online ? pc.sourceRegenOnlineAmount() : pc.sourceRegenOfflineAmount();
-        return clamp(base + rate * dt, min, max);
+        // Mirror of PowerMath.settle/perTickRegen (pinned equal by the equivalence test; inlined to
+        // keep :kernel.state free of a :kernel.rules dependency): the configured amount is power per
+        // power-tick interval, but dt is in server ticks (20/s), so accrue the per-server-tick rate
+        // — else regen is ~tickIntervalSeconds*20× too fast, pinning every online player at max
+        // power (finding #5).
+        double perInterval = online ? pc.sourceRegenOnlineAmount() : pc.sourceRegenOfflineAmount();
+        double perTick = perInterval / (Math.max(1, pc.tickIntervalSeconds()) * TICKS_PER_SECOND);
+        return clamp(base + perTick * dt, min, max);
     }
 
     /** The current configuration image (config is state). */

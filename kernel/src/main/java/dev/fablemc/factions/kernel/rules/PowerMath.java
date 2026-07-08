@@ -34,6 +34,21 @@ public final class PowerMath {
     /** The no-change epsilon: an effective delta smaller than this is dropped (reference 1e-5). */
     public static final double NO_CHANGE_EPSILON = 0.00001;
 
+    /** Server ticks per second — the unit of the accrual clock ({@code IntentEnvelope.tick}). */
+    public static final double TICKS_PER_SECOND = 20.0;
+
+    /**
+     * The per-server-tick regen rate for the lazy accrual. The configured amount is power per
+     * <em>power-tick interval</em> (ref-engines §3.7: the reference applies it once every
+     * {@code tickIntervalSeconds}), but the accrual clock {@code dt} is in server ticks (20/s), so
+     * the amount is divided across the interval's server ticks. Without this the accrual regenerated
+     * ~{@code tickIntervalSeconds*20}× too fast, pinning every online player at max power.
+     */
+    public static double perTickRegen(PowerConfig pc, boolean online) {
+        double perInterval = online ? pc.sourceRegenOnlineAmount() : pc.sourceRegenOfflineAmount();
+        return perInterval / (Math.max(1, pc.tickIntervalSeconds()) * TICKS_PER_SECOND);
+    }
+
     /** Clamps {@code v} into {@code [min, max]}. */
     public static double clamp(double v, double min, double max) {
         if (v < min) {
@@ -203,7 +218,6 @@ public final class PowerMath {
         if (dt <= 0) {
             return clampedBase;
         }
-        double rate = online ? pc.sourceRegenOnlineAmount() : pc.sourceRegenOfflineAmount();
-        return clamp(base + rate * dt, min, max);
+        return clamp(base + perTickRegen(pc, online) * dt, min, max);
     }
 }

@@ -30,6 +30,16 @@ class PowerAccrualTest {
         return new KernelSnapshot(st);
     }
 
+    /**
+     * The per-SERVER-TICK regen rate (the configured amount is per power-tick interval; dt is in
+     * server ticks). Mirror of {@code PowerMath.perTickRegen} — finding #5: without the division the
+     * accrual was ~{@code tickIntervalSeconds*20}× too fast.
+     */
+    private static double perTick(PowerConfig pc, boolean online) {
+        double perInterval = online ? pc.sourceRegenOnlineAmount() : pc.sourceRegenOfflineAmount();
+        return perInterval / (Math.max(1, pc.tickIntervalSeconds()) * 20.0);
+    }
+
     /** Iterated per-tick clamp reference. */
     private static double iterate(double base, double rate, double min, double max, int ticks) {
         double p = base;
@@ -43,44 +53,49 @@ class PowerAccrualTest {
     void onlineAccrualEqualsIteratedClamp() {
         ConfigImage cfg = ConfigImage.defaults();
         PowerConfig pc = cfg.power();
-        double rate = pc.sourceRegenOnlineAmount(); // 6.0
+        double rate = perTick(pc, true);            // 6.0 / (60*20) = 0.005 per server tick
         double min = pc.minPower();                 // 0.0
         double max = pc.maxPower();                 // 10.0
 
         KernelSnapshot snap = snapshotWith(cfg, true, 0.0, 0L, false);
-        for (int tick = 0; tick <= 10; tick++) {
+        // Cross the linear region AND the max clamp: at 0.005/tick, 0→10 takes 2000 ticks (100s).
+        for (int tick : new int[] {0, 1, 500, 1200, 2000, 2400, 3000}) {
             double expected = iterate(0.0, rate, min, max, tick);
             assertEquals(expected, snap.powerAt(0, tick), 1e-9, "online tick=" + tick);
         }
+        // 6.0 power accrues over exactly one power-tick interval (1200 server ticks), matching the
+        // reference's per-interval regen — NOT per server tick.
+        assertEquals(6.0, snap.powerAt(0, 1200), 1e-9, "one interval = configured amount");
     }
 
     @Test
     void offlineAccrualEqualsIteratedClampWithLongerLinearRegion() {
         ConfigImage cfg = ConfigImage.defaults();
         PowerConfig pc = cfg.power();
-        double rate = pc.sourceRegenOfflineAmount(); // 3.0
+        double rate = perTick(pc, false);           // 3.0 / (60*20) = 0.0025 per server tick
         double min = pc.minPower();
         double max = pc.maxPower();
 
         KernelSnapshot snap = snapshotWith(cfg, false, 0.0, 0L, false);
-        for (int tick = 0; tick <= 10; tick++) {
+        for (int tick : new int[] {0, 1, 500, 1200, 2400, 4000, 5000}) {
             double expected = iterate(0.0, rate, min, max, tick);
             assertEquals(expected, snap.powerAt(0, tick), 1e-9, "offline tick=" + tick);
         }
+        assertEquals(3.0, snap.powerAt(0, 1200), 1e-9, "one interval = configured offline amount");
     }
 
     @Test
     void accrualFromNonZeroBaseAndOffsetTick() {
         ConfigImage cfg = ConfigImage.defaults();
         PowerConfig pc = cfg.power();
-        double rate = pc.sourceRegenOnlineAmount();
+        double rate = perTick(pc, true);
         double min = pc.minPower();
         double max = pc.maxPower();
 
         double base = 2.5;
         long asOf = 100L;
         KernelSnapshot snap = snapshotWith(cfg, true, base, asOf, false);
-        for (int dt = 0; dt <= 8; dt++) {
+        for (int dt : new int[] {0, 1, 400, 1200, 1600, 2000}) {
             double expected = iterate(base, rate, min, max, dt);
             assertEquals(expected, snap.powerAt(0, (int) asOf + dt), 1e-9, "dt=" + dt);
         }
