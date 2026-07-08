@@ -59,7 +59,7 @@ hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 # binding (relocated with the rest of slf4j) so those references resolve in-jar for
 # verifyJdk8Api and pool logging is silent rather than a startup warning. Pinned to the
 # slf4j-api line HikariCP 4.0.3 pulls (1.7.x).
-slf4j-nop = { module = "org.slf4j:slf4j-nop", version = "1.7.30" }
+slf4j-nop = { module = "org.slf4j:slf4j-nop", version = "2.0.18" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 mysql = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
