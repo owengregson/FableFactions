@@ -105,7 +105,7 @@ jobs:
           cache-read-only: true
 
       - name: Cache provisioned toolchains (lane runtime JDK ${{ matrix.jdk }})
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/jdks
           key: ${{ runner.os }}-gradle-jdks-${{ matrix.jdk }}-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
@@ -114,7 +114,7 @@ jobs:
       # ~/.gradle/caches/run-task-jars/<platform>/jars/<version>/ — outside
       # setup-gradle's cache scope, so cache it per platform+version.
       - name: Cache downloaded server jars
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/caches/run-task-jars
           key: run-task-jars-${{ matrix.platform }}-${{ matrix.version }}

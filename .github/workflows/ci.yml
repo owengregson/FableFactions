@@ -60,7 +60,7 @@ jobs:
       # ~/.gradle/jdks (outside setup-gradle's cache scope). Cache it so every
       # run does not re-download the gate toolchain.
       - name: Cache provisioned toolchains (JDK 8 gate)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/jdks
           key: ${{ runner.os }}-gradle-jdks-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
