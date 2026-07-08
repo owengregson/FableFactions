@@ -26,6 +26,10 @@ h2 = "1.4.200"
 mysql = "8.0.33"
 
 bstats = "3.2.1"
+# compileOnly ONLY (soft-dep, never shaded): the typed FableExpansion subclass needs the
+# abstract PlaceholderExpansion supertype at compile time; the class is FQN-loaded at
+# runtime behind the PlaceholderAPI presence gate (me/clip is a verifyJdk8Api server ignore).
+placeholderapi = "2.11.6"
 annotations = "26.0.2"
 junit = "5.11.4"
 jqwik = "1.9.2"
@@ -59,6 +63,7 @@ slf4j-nop = { module = "org.slf4j:slf4j-nop", version = "1.7.30" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 mysql = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
+placeholderapi = { module = "me.clip:placeholderapi", version.ref = "placeholderapi" }
 
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
 

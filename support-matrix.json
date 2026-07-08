@@ -1,5 +1,5 @@
 {
-  "_comment": "THE single machine-readable source of truth for the supported platform matrix. Every version, its runtime JDK, its CI lane, and the plugin.yml api-version floor come from here; no Minecraft version or JDK literal lives anywhere else in the build. Build JDK is derived as max(jdk)=25; plugin.yml api-version = floorApi. The 1.7.10 and 1.8.8 jdk/tier values are PROVISIONAL pending the CI ladder probe (version-deltas Part 4 items 2/3): Java 8 is the documented host floor and v52 the base tree, but flagless boot on newer JVMs and loader MR-awareness for those two builds are UNCERTAIN until measured live.",
+  "_comment": "THE single machine-readable source of truth for the supported platform matrix. Every version, its runtime JDK, its CI lane, and the plugin.yml api-version floor come from here; no Minecraft version or JDK literal lives anywhere else in the build. Build JDK is derived as max(jdk)=25; plugin.yml api-version = floorApi. bytecodeTier is the Multi-Release tier the entry's loader x JVM reads (52 = v52 base, 57 = versions/13, 61 = versions/17 originals) and the probe asserts it live. The 1.7.10 and 1.8.8 jdk/tier values are PROVISIONAL pending the CI ladder probe (version-deltas Part 4 items 2/3): Java 8 is the documented host floor and v52 the base tree, but flagless boot on newer JVMs and loader MR-awareness for those two builds are UNCERTAIN until measured live.",
   "floorApi": "1.13",
   "entries": [
     { "version": "1.7.10",  "jdk": 8,  "platform": "paper", "suites": "full", "ci": "pr",      "bytecodeTier": 52 },
@@ -8,10 +8,10 @@
     { "version": "1.10.2",  "jdk": 21, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 61 },
     { "version": "1.11.2",  "jdk": 21, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 61 },
     { "version": "1.12.2",  "jdk": 21, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 61 },
-    { "version": "1.13.2",  "jdk": 13, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 52 },
-    { "version": "1.14.4",  "jdk": 13, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 52 },
-    { "version": "1.15.2",  "jdk": 14, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 52 },
-    { "version": "1.16.5",  "jdk": 16, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 52 },
+    { "version": "1.13.2",  "jdk": 13, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 57 },
+    { "version": "1.14.4",  "jdk": 13, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 57 },
+    { "version": "1.15.2",  "jdk": 14, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 57 },
+    { "version": "1.16.5",  "jdk": 16, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 57 },
     { "version": "1.17.1",  "jdk": 17, "platform": "paper", "suites": "full", "ci": "pr",      "bytecodeTier": 61 },
     { "version": "1.18.2",  "jdk": 17, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 61 },
     { "version": "1.19.4",  "jdk": 17, "platform": "paper", "suites": "full", "ci": "release", "bytecodeTier": 61 },

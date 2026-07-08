@@ -1,4 +1,6 @@
 import groovy.json.JsonSlurper
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import xyz.wagyourtail.jvmdg.gradle.JVMDowngraderExtension
 
 plugins {
@@ -32,7 +34,24 @@ tasks.processResources {
  *  prefix (dev/fablemc/factions/probe/lib/jvmdg/) from core's. Distinctness is the
  *  load-bearing D-8 isolation property: two downgraded plugins sharing a same-FQN
  *  pruned jvmdg runtime cross-link and fail on the shared legacy class cache.
+ *  (The probe stays TWO-tier — 5 classes, nothing hot; the v57 tier is core-only.)
  * ──────────────────────────────────────────────────────────────────────── */
+
+// Same global-console-capture hazard as core's jvmdg tasks: serialize every jvmdg
+// task across the whole build via the shared lock (registerIfAbsent is name-keyed,
+// so this resolves to the one service core registered) and fence out test JVMs.
+abstract class JvmdgConsoleLock : BuildService<BuildServiceParameters.None>
+
+val jvmdgConsoleLock = gradle.sharedServices.registerIfAbsent("jvmdgConsoleLock", JvmdgConsoleLock::class) {
+    maxParallelUsages.set(1)
+}
+
+val consoleNoisyTasks = listOf(
+    ":kernel:test", ":api:test", ":platform:test", ":core:test",
+    ":compat-folia:test", ":compat-modern:test", ":probe:test",
+    ":kernel:compileTestJava", ":api:compileTestJava", ":platform:compileTestJava",
+    ":core:compileTestJava",
+)
 
 // Warning capture (warnings = build failures). Filters JDK-24+ Unsafe deprecation
 // noise from parallel JVMs that leaks into Gradle's GLOBAL console stream.
@@ -40,6 +59,8 @@ fun failOnJvmdgWarnings(jar: Jar) {
     val captured = StringBuilder()
     val sink = StandardOutputListener { text -> captured.append(text) }
     val logSink = jar.project.layout.buildDirectory.file("jvmdg-stage/${jar.name}-output.log")
+    jar.usesService(jvmdgConsoleLock)
+    jar.mustRunAfter(consoleNoisyTasks)
     jar.doFirst {
         logging.addStandardOutputListener(sink)
         logging.addStandardErrorListener(sink)
