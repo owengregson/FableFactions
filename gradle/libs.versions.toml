@@ -16,7 +16,7 @@ paper-modern = "1.20.6-R0.1-SNAPSHOT"
 # present below Paper 1.16.5 where net.kyori is absent from the server. If
 # verifyJdk8Api later flags an adventure class as using a post-Java-8 API, drop to
 # 4.14.0 (the last line proven Java-8-clean) and record it in the build notes.
-adventure = "4.17.0"
+adventure = "5.2.0"
 
 # Java-8-line storage stack, pinned (AM-10): HikariCP 4.0.3 is the last Java-8 line,
 # H2 1.4.200 is Java-8 compatible (NO NON_KEYWORDS URL flag — that is H2 2.x-only),
