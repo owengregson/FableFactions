@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  FableFactions — notification routing
+#
+#  Restart required for most changes.
+# ─────────────────────────────────────────────────────────────────────────────
+
+inbox:
+  # Store missed faction notifications for offline players and deliver them on join.
+  enabled: true
+  max-per-login: 20        # max inbox entries delivered per login (excess stays queued)
+
+member:
+  notify-player-joined: true   # tell members when a player joins the faction
+
+economy:
+  tax:
+    notify-members: true       # tell online members when bank tax is charged
+
+# Server-wide relation-change announcements via a countdown display provider.
+# When disabled (or the provider is absent) announcements fall back to chat only.
+countdown:
+  enabled: true
+  announcement-duration-seconds: 8   # must be > 0
+  display-types:
+    - ACTION_BAR                     # ACTION_BAR, BOSS_BAR, TITLE, CHAT, SCOREBOARD

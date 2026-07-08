@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  FableFactions — roles
+#
+#  Global role defaults and limits. Per-faction custom roles are only editable when
+#  roles.overrides.enabled is true. Built-in roles Owner > Officer > Member are fixed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+roles:
+  overrides:
+    # Per-faction custom role / prefix overrides. When false, factions use the
+    # global defaults below only.
+    enabled: false
+
+  custom:
+    enabled: true          # master toggle for custom role management (/f role ...)
+    min-priority: 11       # min priority for custom roles (built-ins are below this)
+    max-priority: 99       # max priority for custom roles
+    max-per-faction: 8     # max custom roles per faction (0 = unlimited)
+
+  prefix:
+    enabled: true          # allow editing rank prefixes
+    max-length: 32         # hard cap on prefix length in characters (0 = unlimited)
+
+  defaults:
+    owner:
+      prefix: "<gold>[Owner]</gold>"
+    officer:
+      prefix: "<yellow>[Officer]</yellow>"
+    member:
+      prefix: ""

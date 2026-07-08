@@ -1,0 +1,228 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  FableFactions — main configuration
+#
+#  Restart required for most changes. Reload the rest with `/fa reload`.
+#  Database settings live in database.yml; messages in messages/messages_<locale>.yml;
+#  menus in gui.yml; roles in roles.yml; predefined factions in pre-defined.yml;
+#  notification routing in notifications.yml.
+#
+#  Values shown are the built-in defaults; deleting a key restores its default.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Bumped by the plugin when the schema of this file changes; used by the migration hook.
+config-version: 1
+
+factions:
+  # Faction size / count limits.
+  max-members: 50            # max members per faction (0 = unlimited)
+  max-warps: 10              # max warps per faction
+  max-team-chests: 1         # max named team chests per faction
+  max-allies: 5              # max ALLY relations
+  max-truces: 5              # max TRUCE relations
+  team-chest:
+    default-name: default    # name of the chest opened by a bare /f chest
+  invites:
+    ttl-hours: 72            # pending invite lifetime in hours
+
+  language:
+    default: en                       # server default locale
+    allow-player-override: true       # players may choose a personal locale
+    command-opens-gui: true           # /f language with no args opens the language GUI
+    command-open-gui-after-set: true  # re-open the GUI after setting a locale
+    visible-locales: []               # whitelist for tab-complete + GUI (empty = all loaded)
+
+  power:
+    per-player-max: 10.0              # max power each online player contributes
+    regen-per-second: 0.1             # base power regen per second while online
+    loss-on-death: 4.0                # power lost on death in enemy/war-zone land
+    grace-period-seconds: 3600        # no death-loss for this long after server start
+    tick-interval-seconds: 60         # power-tick engine period
+    gain-on-kill:
+      enabled: true
+      amount: 2.0
+      scale:
+        enabled: false                # scale kill reward by power ratio
+        min-factor: 0.25
+        max-factor: 2.0
+    inactive-exclusion:
+      enabled: false                  # exclude long-offline members from max-land calc
+      days: 7
+    death-streak:
+      enabled: false                  # multiply loss for consecutive deaths
+      window-seconds: 600
+      multiplier: 1.5
+    buy:
+      enabled: false                  # allow /f power buy (requires Vault)
+      cost-per-point: 100.0
+      max-per-purchase: 5.0
+    sources:
+      regen-online:
+        enabled: true
+        amount: 6.0
+      regen-offline:
+        enabled: true
+        amount: 3.0
+      death-loss:
+        enabled: true
+        amount: 4.0
+      kill-gain:
+        enabled: true
+        amount: 2.0
+      buy:
+        enabled: true                 # AND-ed with power.buy.enabled
+    constraints:
+      min-power: 0.0
+      max-power: 10.0                 # alias of per-player-max; keep the two in agreement
+      max-change-per-event: 0.0       # 0 = no per-event clamp
+    multipliers:
+      worlds: {}                      # <worldName>: multiplier (e.g. world_nether: 1.25)
+      zones:
+        safezone: 1.0
+        warzone: 1.0
+        own_claimed: 1.0
+        enemy_claimed: 1.0
+        wilderness: 1.0
+    freeze:
+      blocks-automatic: true
+      blocks-regen: true
+      allow-admin-bypass: true
+    notifications:
+      actor: true                     # power.change-actor to the actor
+      faction: false                  # power.change-faction to members
+      staff: false                    # power.change-staff to staff
+
+  map:
+    once-radius: 3                    # radius for /f map once
+
+  list:
+    page-size: 8
+
+  top:
+    page-size: 8
+
+  info:
+    relations:
+      show-allies: true
+      show-truces: false
+      show-neutrals: false
+      show-enemies: false
+
+  warp:
+    list:
+      page-size: 8
+
+  audit:
+    page-size: 10
+
+  land:
+    buffer-zone: 0                    # min chunk gap between enemy factions (0 = off)
+    max-per-command: 200              # max chunks a single /f claim may take
+    per-power: 1.0                    # max-land = floor(totalMemberPower * per-power)
+    max: 500                          # absolute hard cap on faction land
+
+  economy:
+    enabled: true
+    cost-create: 50.0
+    cost-claim: 100.0
+    tax:
+      enabled: false
+      rate: 0.05
+      interval-hours: 24
+      min-bank-balance: 0.0
+      min-charge-amount: 0.01
+    bank:
+      history:
+        page-size: 8
+
+  fly:
+    enabled: true
+    disable-on-threat: true           # cancel flight when an enemy enters the chunk
+    require-own-territory: true       # only fly inside own territory
+
+  flags:
+    pvp:
+      default: true
+      player-editable: true
+    friendly-fire:
+      default: false
+      player-editable: true
+    explosions:
+      default: false
+      player-editable: true
+    fire-spread:
+      default: false
+      player-editable: true
+    open:
+      default: false
+      player-editable: true
+
+  chat:
+    show-tag: false
+    tag-format: "<gray>[<gold>{faction_name}</gold>]</gray> "
+
+  metrics:
+    bstats:
+      enabled: true
+
+  updates:
+    enabled: true
+    notify-ops-on-join: true
+
+  zones:
+    safe-zone:
+      enabled: true
+    war-zone:
+      enabled: true
+
+  overclaiming:
+    enabled: false
+    require-enemy-relation: true
+    offline-protection:
+      enabled: false                  # block overclaim when all defenders are offline
+
+  raidable:
+    broadcast:
+      enabled: true
+      server-wide: false
+
+  war:
+    shield:
+      enabled: false
+      max-duration-hours: 8
+
+  merge:
+    enabled: false
+
+# Soft-integration toggles; a provider that is absent is disabled gracefully.
+integrations:
+  vault: true
+  worldguard: true
+  worldguard-sync-regions: false
+  dynmap: true
+  placeholderapi: true
+  essentialsx:
+    enabled: false
+  lwc:
+    enabled: true
+    require-build-rights-to-create: true
+    remove-if-no-build-rights: true
+    remove-on-claim-change: true
+  discordsrv:
+    enabled: false
+    channel-id: ""
+    events:
+      faction-created:
+        enabled: true
+        message: "**{faction}** was founded!"
+      faction-disbanded:
+        enabled: true
+        message: "**{faction}** was disbanded."
+      relation-ally:
+        enabled: true
+        message: ":handshake: **{source}** and **{target}** are now allies!"
+      relation-truce:
+        enabled: true
+        message: ":white_flag: **{source}** and **{target}** agreed to a truce."
+      relation-enemy:
+        enabled: true
+        message: ":crossed_swords: **{source}** declared war on **{target}**!"

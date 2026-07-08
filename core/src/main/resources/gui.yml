@@ -1,0 +1,191 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  FableFactions — GUI menus
+#
+#  Titles / names / lore use MiniMessage. Item placeholders:
+#    {player} {faction} {faction_members} {faction_land} {faction_bank}
+#    {power} {max_power} {language_current} {language_default} {language_available}
+#
+#  Item actions:
+#    RUN_COMMAND      run `command` as the player
+#    SUGGEST_COMMAND  pre-fill `command` in the chat box
+#    OPEN_MENU        open the menu named `menu`
+#    REFRESH          re-render the current menu
+#    CLOSE            close the menu
+#    LANGUAGE_SET     set the player's locale to `locale`
+#    LANGUAGE_RESET   reset the player's locale to the server default
+# ─────────────────────────────────────────────────────────────────────────────
+
+gui:
+  enabled: true
+  default-menu: main
+  language-menu: language
+
+  menus:
+    main:
+      title: "<gradient:#f6d365:#fda085>Factions Control</gradient>"
+      size: 54
+      items:
+        info:
+          slot: 10
+          material: BOOK
+          name: "<gold>Faction Info"
+          lore:
+            - "<gray>View your faction's details."
+          action: RUN_COMMAND
+          command: "/f info"
+        map:
+          slot: 12
+          material: FILLED_MAP
+          name: "<gold>Territory Map"
+          lore:
+            - "<gray>Render the nearby claim map."
+          action: RUN_COMMAND
+          command: "/f map"
+        claim:
+          slot: 14
+          material: GRASS_BLOCK
+          name: "<green>Claim Land"
+          lore:
+            - "<gray>Claim the chunk you stand in."
+          action: RUN_COMMAND
+          command: "/f claim"
+        unclaim:
+          slot: 16
+          material: BARRIER
+          name: "<red>Unclaim Land"
+          lore:
+            - "<gray>Unclaim the chunk you stand in."
+          action: RUN_COMMAND
+          command: "/f unclaim"
+        invites:
+          slot: 28
+          material: WRITABLE_BOOK
+          name: "<gold>Invites"
+          lore:
+            - "<gray>View and accept pending invites."
+          action: RUN_COMMAND
+          command: "/f join"
+        home:
+          slot: 30
+          material: LODESTONE
+          name: "<gold>Faction Home"
+          lore:
+            - "<gray>Teleport to your faction home."
+          action: RUN_COMMAND
+          command: "/f home"
+        warps:
+          slot: 32
+          material: ENDER_PEARL
+          name: "<gold>Warps"
+          lore:
+            - "<gray>List and travel to faction warps."
+          action: RUN_COMMAND
+          command: "/f warp list"
+        top:
+          slot: 34
+          material: NETHER_STAR
+          name: "<gold>Leaderboard"
+          lore:
+            - "<gray>See the strongest factions."
+          action: RUN_COMMAND
+          command: "/f top"
+        language:
+          slot: 46
+          material: GLOBE_BANNER_PATTERN
+          name: "<aqua>Language"
+          lore:
+            - "<gray>Choose your language."
+          action: OPEN_MENU
+          menu: language
+        your-power:
+          slot: 49
+          material: PLAYER_HEAD
+          glow: true
+          name: "<yellow>{player}"
+          lore:
+            - "<gray>Power: <white>{power}/{max_power}"
+            - "<gray>Faction: <white>{faction}"
+          action: REFRESH
+        close:
+          slot: 53
+          material: STRUCTURE_VOID
+          name: "<red>Close"
+          action: CLOSE
+
+    language:
+      title: "<gradient:#84fab0:#8fd3f4>Language</gradient>"
+      size: 54
+      items:
+        language-status:
+          slot: 4
+          material: GLOBE_BANNER_PATTERN
+          name: "<aqua>Your Language"
+          lore:
+            - "<gray>Current: <white>{language_current}"
+            - "<gray>Default: <white>{language_default}"
+            - "<gray>Available: <white>{language_available}"
+          action: REFRESH
+        en:
+          slot: 19
+          material: WHITE_BANNER
+          name: "<white>English"
+          action: LANGUAGE_SET
+          locale: en
+        es:
+          slot: 20
+          material: RED_BANNER
+          name: "<white>Español"
+          action: LANGUAGE_SET
+          locale: es
+        de:
+          slot: 21
+          material: BLACK_BANNER
+          name: "<white>Deutsch"
+          action: LANGUAGE_SET
+          locale: de
+        fr:
+          slot: 22
+          material: BLUE_BANNER
+          name: "<white>Français"
+          action: LANGUAGE_SET
+          locale: fr
+        pt-BR:
+          slot: 23
+          material: GREEN_BANNER
+          name: "<white>Português (BR)"
+          action: LANGUAGE_SET
+          locale: pt-BR
+        zh:
+          slot: 24
+          material: RED_BANNER
+          name: "<white>中文"
+          action: LANGUAGE_SET
+          locale: zh
+        ru:
+          slot: 25
+          material: BLUE_BANNER
+          name: "<white>Русский"
+          action: LANGUAGE_SET
+          locale: ru
+        ja:
+          slot: 31
+          material: WHITE_BANNER
+          name: "<white>日本語"
+          action: LANGUAGE_SET
+          locale: ja
+        language-reset:
+          slot: 49
+          material: FEATHER
+          name: "<yellow>Reset to Default"
+          action: LANGUAGE_RESET
+        back:
+          slot: 45
+          material: ARROW
+          name: "<gray>Back"
+          action: OPEN_MENU
+          menu: main
+        close:
+          slot: 53
+          material: STRUCTURE_VOID
+          name: "<red>Close"
+          action: CLOSE

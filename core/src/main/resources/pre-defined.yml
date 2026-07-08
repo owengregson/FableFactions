@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  FableFactions — predefined (server-owned template) factions
+#
+#  Disabled by default. Managed in-game with
+#  /fa predefined create|claim|sethome|reload|list.
+#
+#  Each entry under `factions:` stores a home location and a list of claimed chunks:
+#
+#    factions:
+#      Spawn:
+#        home:
+#          world: world
+#          x: 0.5
+#          y: 64.0
+#          z: 0.5
+#          yaw: 0.0
+#          pitch: 0.0
+#        claims:
+#          - { world: world, x: 0, z: 0 }
+#          - { world: world, x: 0, z: 1 }
+# ─────────────────────────────────────────────────────────────────────────────
+
+enabled: false
+case-sensitive: false
+block-disband: true
+
+factions: {}

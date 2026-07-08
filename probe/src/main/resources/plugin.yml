@@ -4,3 +4,6 @@ version: '${version}'
 api-version: '${apiVersion}'
 folia-supported: true
 description: FableFactions live-matrix self-test probe (boot-tier assertion).
+# Soft dep so the probe enables AFTER FableFactions, letting its boot/smoke suites observe
+# the target plugin's registered commands, loaded classes, and capabilities.
+softdepend: [FableFactions]
