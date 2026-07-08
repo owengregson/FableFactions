@@ -87,7 +87,7 @@ public final class IntegrationsBootstrap {
                 settings.worldGuard(), settings.worldGuardSyncRegions(), logger);
         lwcInterop = LwcInteropFactory.create(settings, snapshots, worlds, messages, logger);
         lwcInterop.register(plugin);
-        placeholderHook = PlaceholderHook.create(logger);
+        placeholderHook = PlaceholderHook.create(logger, snapshots, plugin.getDescription().getVersion());
         teamsApi = TeamsApiProvider.create(logger);
 
         dynmap = startDynmap();
@@ -99,7 +99,7 @@ public final class IntegrationsBootstrap {
                 dynmap, discord, ezCountdown, wgMirror, lwcInterop, announcementText);
     }
 
-    /** Tears down live integrations (dynmap flush + markers, LWC listeners). Idempotent. */
+    /** Tears down live integrations (dynmap flush + markers, LWC listeners, PAPI). Idempotent. */
     public void stop() {
         if (dynmapFlush != null) {
             dynmapFlush.cancel();
@@ -110,6 +110,9 @@ public final class IntegrationsBootstrap {
         }
         if (lwcInterop != null) {
             lwcInterop.unregister();
+        }
+        if (placeholderHook != null) {
+            placeholderHook.unregister();
         }
     }
 

@@ -7,7 +7,7 @@ api-version: '${apiVersion}'
 folia-supported: true
 description: Territory, power, and relation management — one jar, PaperSpigot 1.7.10 to Paper/Folia 26.
 website: https://modrinth.com/plugin/fablefactions
-authors: [Shadow48402, Madus, Cayorion, Ulumulu1510, MarkehMe, Brettflan]
+authors: [Owen Gregson]
 
 softdepend: [TeamsAPI, Vault, WorldGuard, WorldEdit, PlaceholderAPI, Essentials, EssentialsX, dynmap, DiscordSRV, EzEconomy, EzCountdown, LWC, LWCX]
 loadbefore: [EzShops, EzAuction, EzRTP, EzClean]
