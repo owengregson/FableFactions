@@ -109,6 +109,20 @@ public final class WriterThread {
         }
     }
 
+    /**
+     * Drains and reduces every remaining queued intent on the CALLING thread until both lanes are
+     * empty (ordered shutdown, proposal-C §6.4). This must be called ONLY after {@link #shutdown()}
+     * has joined the writer daemon — the writer is then dead, so state is single-thread-confined
+     * again and it is safe to reduce/publish/journal from the shutdown thread. Used to drain the
+     * final {@code CommitChestContents} intents enqueued by {@code ChestSessions.forceCommitAll}
+     * after the daemon has stopped, so no committed intent is lost at disable.
+     */
+    public void drainRemaining() {
+        while (drainAndProcess() > 0) {
+            // keep draining both lanes until empty
+        }
+    }
+
     /** Stops the writer after the in-flight batch, draining nothing further; joins briefly. */
     public void shutdown() {
         running = false;
