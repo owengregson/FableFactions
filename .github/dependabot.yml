@@ -51,6 +51,12 @@ updates:
       # CommandSender#sendMessage(UUID, String[]) — a confirmed build break). A
       # floor change is a deliberate manual decision, never an auto-bump.
       - dependency-name: 'com.destroystokyo.paper:paper-api'
+      # The MODERN/FOLIA compileOnly API pins (paper-folia 1.20.4, paper-modern
+      # 1.20.6 — both this artifact) are the exact API levels :compat-folia and
+      # :compat-modern compile against and FQN-load behind probes. An auto-bump to
+      # a current build (e.g. 26.1.2) breaks compat compilation (confirmed CI
+      # failure). Like the floor, a bump here is a deliberate manual decision.
+      - dependency-name: 'io.papermc.paper:paper-api'
     groups:
       # Batch low-risk bumps for everything not ignored above.
       gradle-minor-patch:
