@@ -7,7 +7,7 @@
 # NOTE the floor's OLD groupId: com.destroystokyo.paper published paper-api through
 # 1.16.5; io.papermc.paper starts only at 1.17. Compiling core against the 1.13 API
 # (version-deltas §3.17) shrinks the 1.13–1.16 probe band to ~zero.
-paper-floor = "1.13.2-R0.1-SNAPSHOT"
+paper-floor = "1.16.5-R0.1-SNAPSHOT"
 paper-folia = "1.20.4-R0.1-SNAPSHOT"
 paper-modern = "1.20.6-R0.1-SNAPSHOT"
 
@@ -29,14 +29,14 @@ bstats = "3.2.1"
 # compileOnly ONLY (soft-dep, never shaded): the typed FableExpansion subclass needs the
 # abstract PlaceholderExpansion supertype at compile time; the class is FQN-loaded at
 # runtime behind the PlaceholderAPI presence gate (me/clip is a verifyJdk8Api server ignore).
-placeholderapi = "2.11.6"
-annotations = "26.0.2"
+placeholderapi = "2.12.3"
+annotations = "26.1.0"
 junit = "5.11.4"
-jqwik = "1.9.2"
-archunit = "1.3.0"
-asm = "9.7"
+jqwik = "1.10.1"
+archunit = "1.4.2"
+asm = "9.10.1"
 
-shadow = "9.4.2"
+shadow = "9.5.1"
 run-paper = "3.0.2"
 # JVMDowngrader — lowers the shaded Java-17 (v61) jar to a Multi-Release mega-jar
 # whose base tree is class v52 (Java 8) with the original v61 kept under
