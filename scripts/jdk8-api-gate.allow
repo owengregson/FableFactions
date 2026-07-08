@@ -1,0 +1,11 @@
+# verifyJdk8Api allowlist — MUST STAY EMPTY.
+#
+# A real miss is a real bug: the reference resolves neither in a Java-8 rt.jar, in-jar,
+# nor a documented server-provided --ignore package, so it would NoSuchMethodError /
+# NoClassDefFoundError on a real 1.8 server. The fix is ALWAYS one of:
+#   1. use a Java-8-available alternative, or one JVMDowngrader already shims;
+#   2. shade the missing runtime into the jar (relocated under dev/fablemc/factions/lib);
+#   3. add a documented --ignore prefix ONLY if the server genuinely provides it.
+# Never allowlist to make the gate pass. Any non-comment line here is a policy breach.
+#
+# Format (anchored prefix keys): CLASS <owner> | METHOD <owner>#<name> <desc> | FIELD <owner>#<name> <desc>

@@ -1,0 +1,263 @@
+name: FableFactions
+version: '${version}'
+main: dev.fablemc.factions.core.boot.FableFactionsPlugin
+# api-version '1.13' is the unique value that loads everywhere from 1.7.10 to 26.x
+# with no Commodore shim (version-deltas §3.12); expanded from support-matrix floorApi.
+api-version: '${apiVersion}'
+folia-supported: true
+description: Territory, power, and relation management — one jar, PaperSpigot 1.7.10 to Paper/Folia 26.
+website: https://modrinth.com/plugin/pvpindex-factions
+authors: [Shadow48402, Madus, Cayorion, Ulumulu1510, MarkehMe, Brettflan]
+
+softdepend: [TeamsAPI, Vault, WorldGuard, WorldEdit, PlaceholderAPI, Essentials, EssentialsX, dynmap, DiscordSRV, EzEconomy, EzCountdown, LWC, LWCX]
+loadbefore: [EzShops, EzAuction, EzRTP, EzClean]
+
+commands:
+  f:
+    description: FableFactions main command (per-subcommand permissions).
+    aliases: [faction, factions]
+    usage: /f <subcommand> [args]
+  fa:
+    description: FableFactions administrative command.
+    aliases: [factionadmin]
+    permission: factions.admin
+    usage: /fa <subcommand> [args]
+
+permissions:
+  factions.admin:
+    description: Full administrative access to all /fa commands and bypasses.
+    default: op
+    children:
+      factions.bypass: true
+      factions.cmd.claim.other: true
+      factions.cmd.disband.other: true
+      factions.cmd.shield: true
+      factions.cmd.flag.set: true
+      factions.cmd.audit: true
+      factions.cmd.admin.power: true
+      factions.cmd.admin.power.view: true
+      factions.cmd.admin.power.set: true
+      factions.cmd.admin.power.add: true
+      factions.cmd.admin.power.remove: true
+      factions.cmd.admin.power.reset: true
+      factions.cmd.admin.power.freeze: true
+      factions.cmd.admin.power.history: true
+      factions.cmd.chest: true
+      factions.cmd.chest.create: true
+      factions.cmd.chest.delete: true
+      factions.cmd.role: true
+      factions.cmd.role.list: true
+      factions.cmd.role.create: true
+      factions.cmd.role.edit: true
+      factions.cmd.role.delete: true
+      factions.cmd.role.assign: true
+  factions.bypass:
+    description: Bypass faction territory protection (build/interact/PvP).
+    default: op
+  factions.cmd.shield:
+    description: Set/clear a faction's daily war shield window.
+    default: op
+  factions.cmd.power.history:
+    description: View your own power change history.
+    default: true
+  factions.cmd.power.history.other:
+    description: View another player's power history.
+    default: op
+  factions.cmd.admin.power:
+    description: Root for /fa power.
+    default: op
+  factions.cmd.admin.power.view:
+    description: View target player power.
+    default: op
+  factions.cmd.admin.power.set:
+    description: Set exact player power.
+    default: op
+  factions.cmd.admin.power.add:
+    description: Add power.
+    default: op
+  factions.cmd.admin.power.remove:
+    description: Remove power.
+    default: op
+  factions.cmd.admin.power.reset:
+    description: Reset to configured max.
+    default: op
+  factions.cmd.admin.power.freeze:
+    description: Toggle frozen state.
+    default: op
+  factions.cmd.admin.power.history:
+    description: View power history via /fa power history.
+    default: op
+  factions.cmd.create:
+    description: Create a faction.
+    default: true
+  factions.cmd.disband:
+    description: Disband own faction.
+    default: true
+  factions.cmd.disband.other:
+    description: Force-disband any faction.
+    default: op
+  factions.cmd.rename:
+    description: Rename own faction.
+    default: true
+  factions.cmd.desc:
+    description: Set own faction description.
+    default: true
+  factions.cmd.motd:
+    description: View/set faction MOTD.
+    default: true
+  factions.cmd.list:
+    description: List factions.
+    default: true
+  factions.cmd.map:
+    description: View territory map.
+    default: true
+  factions.cmd.notify:
+    description: Manage personal notification settings.
+    default: true
+  factions.cmd.language:
+    description: View/change personal language.
+    default: true
+  factions.cmd.gui:
+    description: Open GUI.
+    default: true
+  factions.cmd.top:
+    description: Power leaderboard.
+    default: true
+  factions.cmd.invite:
+    description: Invite/manage incoming invites.
+    default: true
+  factions.cmd.invite.list:
+    description: List pending invites.
+    default: true
+  factions.cmd.invite.revoke:
+    description: Revoke a sent invite.
+    default: true
+  factions.cmd.join:
+    description: Join via pending invite.
+    default: true
+  factions.cmd.flag:
+    description: View flags.
+    default: true
+  factions.cmd.flag.set:
+    description: Toggle/set a flag (officer+ enforced in-game).
+    default: true
+  factions.cmd.audit:
+    description: View audit log (officer+ enforced in-game).
+    default: op
+  factions.cmd.leave:
+    description: Leave faction.
+    default: true
+  factions.cmd.kick:
+    description: Kick member.
+    default: true
+  factions.cmd.promote:
+    description: Promote one rank.
+    default: true
+  factions.cmd.demote:
+    description: Demote one rank.
+    default: true
+  factions.cmd.leader:
+    description: Transfer leadership.
+    default: true
+  factions.cmd.role:
+    description: Root role-management.
+    default: op
+  factions.cmd.role.list:
+    description: List roles.
+    default: op
+  factions.cmd.role.create:
+    description: Create custom roles.
+    default: op
+  factions.cmd.role.edit:
+    description: Edit role name/priority/prefix.
+    default: op
+  factions.cmd.role.delete:
+    description: Delete custom roles.
+    default: op
+  factions.cmd.role.assign:
+    description: Assign role to member.
+    default: op
+  factions.cmd.relation:
+    description: Set/view relations.
+    default: true
+  factions.cmd.merge:
+    description: Send/accept merge requests.
+    default: true
+  factions.cmd.predefined:
+    description: Root predefined management.
+    default: op
+    children:
+      factions.cmd.predefined.create: true
+      factions.cmd.predefined.claim: true
+      factions.cmd.predefined.sethome: true
+      factions.cmd.predefined.reload: true
+      factions.cmd.predefined.list: true
+  factions.cmd.predefined.create:
+    description: Create predefined faction.
+    default: op
+  factions.cmd.predefined.claim:
+    description: Save current chunk into a preset.
+    default: op
+  factions.cmd.predefined.sethome:
+    description: Save current location as predefined home.
+    default: op
+  factions.cmd.predefined.reload:
+    description: Reload pre-defined.yml cache.
+    default: op
+  factions.cmd.predefined.list:
+    description: List predefined entries.
+    default: op
+  factions.cmd.claim:
+    description: Claim land for own faction.
+    default: true
+  factions.cmd.claim.other:
+    description: Force-(un)claim for any faction.
+    default: op
+  factions.cmd.unclaim:
+    description: Unclaim own land.
+    default: true
+  factions.cmd.home:
+    description: Teleport to faction home.
+    default: true
+  factions.cmd.sethome:
+    description: Set/remove faction home.
+    default: true
+  factions.cmd.warp:
+    description: Teleport to a warp.
+    default: true
+  factions.cmd.setwarp:
+    description: Create/update/delete warps.
+    default: true
+  factions.cmd.warp.password:
+    description: Set/clear warp password (officer+).
+    default: true
+  factions.cmd.warp.cost:
+    description: Set per-use warp cost (officer+).
+    default: true
+  factions.cmd.chest:
+    description: Open/view team chests.
+    default: true
+  factions.cmd.chest.create:
+    description: Create chests (officer+).
+    default: true
+  factions.cmd.chest.delete:
+    description: Delete chests (officer+).
+    default: true
+  factions.cmd.bank:
+    description: View bank, deposit, withdraw.
+    default: true
+  factions.cmd.bank.transfer:
+    description: Transfer to another faction bank.
+    default: op
+  factions.cmd.bank.history:
+    description: View bank transaction history.
+    default: true
+  factions.cmd.fly:
+    description: Toggle faction flight.
+    default: true
+  factions.cmd.safezone:
+    description: Assign/remove safe-zone chunks.
+    default: op
+  factions.cmd.warzone:
+    description: Assign/remove war-zone chunks.
+    default: op

@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FableFactions floor-symbol manifest (AM-13)
+#
+# The committed floor for the two in-process ASM build gates:
+#   verifyDescriptorFloor   — a class registered as a BASELINE (non-@ProbeGated)
+#                             org.bukkit.event.Listener must not mention any
+#                             [POST_FLOOR_TYPES] entry in a method/field descriptor
+#                             (Bukkit's createRegisteredListeners reflects EVERY
+#                             declared member; one absent type registers ZERO handlers
+#                             and silently kills that whole listener — GAP 1).
+#   verifyNoStickyGetstatic — no GETSTATIC of any [POST_FLOOR_ENUM_CONSTANTS] entry
+#                             (a direct getstatic of a sub-floor enum constant is a
+#                             STICKY NoSuchFieldError re-thrown on every event — GAP 2);
+#                             such constants must flow through the Constants resolver
+#                             / Enum.valueOf.
+#
+# Format: one JVM-internal symbol per line; '#' starts a comment; blank lines ignored.
+#   [POST_FLOOR_TYPES]           internal class names  (org/bukkit/NamespacedKey)
+#   [POST_FLOOR_ENUM_CONSTANTS]  <ownerInternalName>.<CONSTANT>
+#
+# UPGRADE PATH (AM-13): this hand-curated hazard list — sourced from version-deltas.md
+# §3.8 / Part 1 (every known post-1.7.10 type, member and enum constant a factions
+# plugin touches) — is the PROVISIONAL floor until a real PaperSpigot 1.7.10 API jar is
+# procured. When it is, run the committed dumper to produce the authoritative full
+# class+member table and diff it in:
+#
+#   javac -cp <asm-9.7.jar> -d out scripts/tools/FloorSymbolDump.java
+#   java  -cp out:<asm-9.7.jar> FloorSymbolDump paperspigot-1.7.10-api.jar floor-1.7.10.txt
+#
+# The gate MECHANISM is identical against either table; only the data upgrades in
+# place, and the live 1.7.10 matrix lane is the backstop. net/kyori/** is
+# relocation-handled (verifyRelocation) and Material entries are flattening-handled
+# (LegacyMaterials seam) — both omitted here by design.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[POST_FLOOR_TYPES]
+# PersistentDataContainer / NamespacedKey (NamespacedKey 1.12+, PDC 1.14+)
+org/bukkit/NamespacedKey
+org/bukkit/persistence/PersistentDataContainer
+org/bukkit/persistence/PersistentDataHolder
+org/bukkit/persistence/PersistentDataType
+org/bukkit/persistence/PersistentDataAdapterContext
+# Item pickup (1.12; dual-registered with legacy PlayerPickupItemEvent)
+org/bukkit/event/entity/EntityPickupItemEvent
+# Block explosion (1.8.3; beds/anchors/cannons on modern)
+org/bukkit/event/block/BlockExplodeEvent
+# ArmorStand + interact-at (1.8) and 1.9 cloud entity
+org/bukkit/entity/ArmorStand
+org/bukkit/entity/AreaEffectCloud
+# Paper Adventure chat event (1.16.5) — baseline chat stays on AsyncPlayerChatEvent (AM-1)
+io/papermc/paper/event/player/AsyncChatEvent
+# Durability moved to Damageable meta at flattening (1.13)
+org/bukkit/inventory/meta/Damageable
+# Raids (game 1.14; Bukkit Raid API / raid events ~1.15)
+org/bukkit/Raid
+org/bukkit/event/raid/RaidTriggerEvent
+org/bukkit/event/raid/RaidFinishEvent
+org/bukkit/event/raid/RaidSpawnWaveEvent
+org/bukkit/event/raid/RaidStopEvent
+# Lingering potion material/entity (1.9)
+org/bukkit/entity/LingeringPotion
+# Elytra glide toggle (~1.10)
+org/bukkit/event/entity/EntityToggleGlideEvent
+# Mount events — Bukkit package (1.20.3+) and the older Spigot package (both hazards)
+org/bukkit/event/entity/EntityMountEvent
+org/spigotmc/event/entity/EntityMountEvent
+
+[POST_FLOOR_ENUM_CONSTANTS]
+# GameMode.SPECTATOR absent pre-1.8
+org/bukkit/GameMode.SPECTATOR
+# DamageCause constants added after the floor (FLY_INTO_WALL 1.9, HOT_FLOOR 1.10, SWEEP 1.11)
+org/bukkit/event/entity/EntityDamageEvent$DamageCause.ENTITY_SWEEP_ATTACK
+org/bukkit/event/entity/EntityDamageEvent$DamageCause.FLY_INTO_WALL
+org/bukkit/event/entity/EntityDamageEvent$DamageCause.HOT_FLOOR
+# TeleportCause constants added at 1.9
+org/bukkit/event/player/PlayerTeleportEvent$TeleportCause.CHORUS_FRUIT
+org/bukkit/event/player/PlayerTeleportEvent$TeleportCause.END_GATEWAY
+# ClickType.SWAP_OFFHAND (1.16)
+org/bukkit/event/inventory/ClickType.SWAP_OFFHAND
+# EquipmentSlot.OFF_HAND (1.9)
+org/bukkit/inventory/EquipmentSlot.OFF_HAND
+# SpawnReason.RAID (1.14)
+org/bukkit/event/entity/CreatureSpawnEvent$SpawnReason.RAID

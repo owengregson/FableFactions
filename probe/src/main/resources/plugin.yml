@@ -1,0 +1,6 @@
+name: FableFactionsProbe
+main: dev.fablemc.factions.probe.FableFactionsProbe
+version: '${version}'
+api-version: '${apiVersion}'
+folia-supported: true
+description: FableFactions live-matrix self-test probe (boot-tier assertion).

@@ -1,0 +1,77 @@
+[versions]
+# paper-api compile-API artifacts, NOT support-matrix members: the three API levels
+# the modules compile AGAINST (floor / Folia symbols / modern symbols), chosen for
+# the symbols each needs — never the runtime versions the plugin is TESTED on. The
+# tested Minecraft versions live only in support-matrix.json.
+#
+# NOTE the floor's OLD groupId: com.destroystokyo.paper published paper-api through
+# 1.16.5; io.papermc.paper starts only at 1.17. Compiling core against the 1.13 API
+# (version-deltas §3.17) shrinks the 1.13–1.16 probe band to ~zero.
+paper-floor = "1.13.2-R0.1-SNAPSHOT"
+paper-folia = "1.20.4-R0.1-SNAPSHOT"
+paper-modern = "1.20.6-R0.1-SNAPSHOT"
+
+# Shaded + relocated into the FableFactions jar (dev.fablemc.factions.lib.adventure)
+# so a self-contained Adventure — the legacy-string serializer especially — is
+# present below Paper 1.16.5 where net.kyori is absent from the server. If
+# verifyJdk8Api later flags an adventure class as using a post-Java-8 API, drop to
+# 4.14.0 (the last line proven Java-8-clean) and record it in the build notes.
+adventure = "4.17.0"
+
+# Java-8-line storage stack, pinned (AM-10): HikariCP 4.0.3 is the last Java-8 line,
+# H2 1.4.200 is Java-8 compatible (NO NON_KEYWORDS URL flag — that is H2 2.x-only),
+# mysql-connector-j 8.0.33. All three shaded + relocated under dev.fablemc.factions.lib.*.
+hikari = "4.0.3"
+h2 = "1.4.200"
+mysql = "8.0.33"
+
+bstats = "3.2.1"
+annotations = "26.0.2"
+junit = "5.11.4"
+jqwik = "1.9.2"
+archunit = "1.3.0"
+asm = "9.7"
+
+shadow = "9.4.2"
+run-paper = "3.0.2"
+# JVMDowngrader — lowers the shaded Java-17 (v61) jar to a Multi-Release mega-jar
+# whose base tree is class v52 (Java 8) with the original v61 kept under
+# META-INF/versions/17, so the one artifact classloads from Java 8 up. THE
+# load-bearing tool version; the behavior below is 1.3.6-specific.
+jvmdowngrader = "1.3.6"
+
+[libraries]
+paper-api-floor = { module = "com.destroystokyo.paper:paper-api", version.ref = "paper-floor" }
+paper-api-folia = { module = "io.papermc.paper:paper-api", version.ref = "paper-folia" }
+paper-api-modern = { module = "io.papermc.paper:paper-api", version.ref = "paper-modern" }
+
+adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
+adventure-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
+adventure-serializer-legacy = { module = "net.kyori:adventure-text-serializer-legacy", version.ref = "adventure" }
+
+hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+# HikariCP logs via slf4j-api (shaded transitively); slf4j-api's LoggerFactory statically
+# references org.slf4j.impl.Static*Binder, which a binding must provide. Bundle the no-op
+# binding (relocated with the rest of slf4j) so those references resolve in-jar for
+# verifyJdk8Api and pool logging is silent rather than a startup warning. Pinned to the
+# slf4j-api line HikariCP 4.0.3 pulls (1.7.x).
+slf4j-nop = { module = "org.slf4j:slf4j-nop", version = "1.7.30" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+mysql = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
+bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
+
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
+
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
+archunit = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+# ASM for the JDK-8 gate tool and the in-process AM-13 descriptor-floor gates.
+asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+run-paper = { id = "xyz.jpenilla.run-paper", version.ref = "run-paper" }
+jvmdowngrader = { id = "xyz.wagyourtail.jvmdowngrader", version.ref = "jvmdowngrader" }
