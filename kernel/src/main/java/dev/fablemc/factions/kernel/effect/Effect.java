@@ -3,6 +3,7 @@ package dev.fablemc.factions.kernel.effect;
 import java.util.UUID;
 
 import dev.fablemc.factions.kernel.audit.FactionAuditAction;
+import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
@@ -266,6 +267,18 @@ public sealed interface Effect {
 
     record LwcPurgeRequested(long seq, Origin origin, int worldIdx, long key, int newOwner)
             implements Effect {
+    }
+
+    // ── Paged-continuation control (AM-5, added by Wave 2a) ───────────────────────────────
+
+    /**
+     * A request that the writer re-enqueue {@code next} on the system lane (behind already-queued
+     * intents) to continue a paged bulk operation (AM-5). Emitted by the reducer when a paged
+     * intent (disband / unclaim-all / merge / tax-sweep / zone / retag) has more pages to process;
+     * the writer publishes the intermediate snapshot, then submits {@code next}. This is the ONLY
+     * control effect that carries an {@link Intent} back into the pipeline.
+     */
+    record ContinuationRequested(long seq, Origin origin, Intent next) implements Effect {
     }
 
     // ── Enumerated byte codes carried by the records above ────────────────────────────────
