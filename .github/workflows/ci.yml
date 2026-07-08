@@ -69,7 +69,7 @@ jobs:
         run: ./gradlew build --stacktrace
 
       - name: Upload plugin jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FableFactions
           path: core/build/libs/FableFactions-*.jar
@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload test reports (failure only)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: |
