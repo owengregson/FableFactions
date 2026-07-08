@@ -1,0 +1,103 @@
+name: Bug report
+description: Something in FableFactions is broken or behaves unexpectedly.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. FableFactions supports Spigot/Paper 1.7.10 through
+        Paper 26.1.2 and Folia in one jar, so **exact platform and version details
+        matter** — please fill in every environment field.
+
+        For exploitable bugs (item/money duplication, protection bypass, permission
+        escalation), do **not** open a public issue — see
+        [SECURITY.md](https://github.com/owengregson/FableFactions/blob/main/SECURITY.md)
+        and report privately.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Server platform
+      options:
+        - Spigot
+        - Paper
+        - Folia
+        - Other (specify in "What happened")
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: Exact server version
+      description: Full version string, e.g. the output of `/version`.
+      placeholder: "Paper 1.21.4 build 123 / git-Spigot-xxxxxxx (MC 1.8.8)"
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: FableFactions version
+      description: From `/version FableFactions` or the jar file name.
+      placeholder: "1.0.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: java-version
+    attributes:
+      label: Java version
+      description: Output of `java -version` on the server host.
+      placeholder: "openjdk 21.0.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage backend
+      options:
+        - H2 (embedded, default)
+        - MySQL
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Describe the actual behavior and the behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. /f create Test
+        2. /f claim
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: >
+        The config.yml / database.yml sections related to the bug (redact any
+        passwords). Skip if you run stock defaults.
+      render: yaml
+  - type: textarea
+    id: boot-report
+    attributes:
+      label: Startup boot report
+      description: >
+        The FableFactions boot-report block from the server startup log (the
+        per-subsystem lines logged when the plugin enables — they include detected
+        capabilities, scheduler backend, and storage state). Include any stack traces
+        that appeared.
+      render: text
+  - type: textarea
+    id: other-plugins
+    attributes:
+      label: Other plugins
+      description: >
+        Output of `/plugins`, or at least any that interact with FableFactions
+        (Vault, WorldGuard, PlaceholderAPI, Essentials/EssentialsX, dynmap, LWC/LWCX,
+        DiscordSRV, EzCountdown, TeamsAPI, ...).

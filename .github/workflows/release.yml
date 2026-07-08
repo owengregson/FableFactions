@@ -1,0 +1,93 @@
+# Tag-driven release: build the mega-jar through every verification gate,
+# refuse to ship if the tag disagrees with gradle.properties, attach the jar
+# plus SHA-256 checksums, and auto-generate release notes.
+#
+# Usage: bump `version=` in gradle.properties, merge, then push tag v<version>.
+# A '-' in the tag (e.g. v1.0.0-beta.1) marks the release as a prerelease.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fail loudly BEFORE spending build minutes: the tag must match the
+      # single version home (gradle.properties) exactly.
+      - name: Verify tag matches gradle.properties version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROP_VERSION=$(grep '^version=' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          if [ "$TAG_VERSION" != "$PROP_VERSION" ]; then
+            echo "::error::Tag version '$TAG_VERSION' does not match gradle.properties version '$PROP_VERSION'."
+            echo "::error::Bump gradle.properties (the single version home) and re-tag."
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches gradle.properties version $PROP_VERSION."
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # A tag ref is never main; read the cache main populated.
+          cache-read-only: true
+
+      - name: Cache provisioned toolchains (JDK 8 gate)
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/jdks
+          key: ${{ runner.os }}-gradle-jdks-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
+
+      - name: Build (mega-jar + all verification gates + tests)
+        run: ./gradlew build --stacktrace
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd core/build/libs
+          sha256sum FableFactions-*.jar > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            core/build/libs/FableFactions-*.jar
+            core/build/libs/SHA256SUMS.txt
+          # v1.0.0-beta.1, v1.1.0-rc.2, ... are prereleases; v1.0.0 is not.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      # TODO(post-beta): publish to Modrinth once the project page exists.
+      # Requires a MODRINTH_TOKEN repository secret; ONE mega-jar covers the
+      # whole 1.7.10–26.1.2 range, so list every supported game version.
+      #
+      # - name: Publish to Modrinth
+      #   uses: Kir-Antipov/mc-publish@v3
+      #   with:
+      #     modrinth-id: <project-id>
+      #     modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+      #     files: core/build/libs/FableFactions-*.jar
+      #     loaders: |
+      #       paper
+      #       spigot
+      #       folia
+      #     game-versions: |
+      #       >=1.7.10

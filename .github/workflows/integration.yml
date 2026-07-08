@@ -1,0 +1,143 @@
+# Live server integration matrix — boots real Paper/Spigot/Folia servers via
+# run-paper with the shipped mega-jar + probe plugin and runs the live suites.
+#
+# NOTE: these lanes are beta-scoped best-effort (docs/ARCHITECTURE.md §7): the
+# Gradle machinery and probe plugin ship with v1.0.0-beta.1, but per-entry
+# enablement follows hardware/network availability. Lanes are NOT required
+# status checks yet — ci.yml is the gating pipeline.
+#
+# Lane selection comes from support-matrix.json (the single source of truth):
+#   - pull_request           → entries with "ci": "pr"   (the 5-lane smoke subset)
+#   - workflow_dispatch      → "pr" subset, or ALL 18 entries when `full` is set
+#   - schedule (nightly)     → ALL 18 entries
+
+name: Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Run the full 18-entry matrix (default: PR smoke subset)'
+        type: boolean
+        default: false
+  schedule:
+    # Nightly full matrix, 04:30 UTC (off the :00 rush).
+    - cron: '30 4 * * *'
+  pull_request:
+    paths:
+      # Runtime-behavior source trees (a docs/README change cannot alter a live boot).
+      - 'core/src/**'
+      - 'platform/src/**'
+      - 'kernel/src/**'
+      - 'compat/**'
+      # The probe plugin IS the live suite driver.
+      - 'probe/src/**'
+      # Build files: any of these can change what jar the servers load.
+      - '**/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'support-matrix.json'
+      - '.github/workflows/integration.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  matrix-prep:
+    name: Select lanes from support-matrix.json
+    # Guard: never run the scheduled matrix on forks.
+    if: github.event_name != 'schedule' || github.repository == 'owengregson/FableFactions'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: support-matrix.json
+          sparse-checkout-cone-mode: false
+
+      - name: Build lane matrix with jq
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: ${{ inputs.full }}
+        run: |
+          if [ "$EVENT" = "schedule" ] || { [ "$EVENT" = "workflow_dispatch" ] && [ "$FULL" = "true" ]; }; then
+            FILTER='.entries[]'
+          else
+            FILTER='.entries[] | select(.ci == "pr")'
+          fi
+          MATRIX=$(jq -c "{include: [${FILTER} | {version, platform, jdk}]}" support-matrix.json)
+          echo "Selected lanes: $MATRIX"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  lane:
+    name: ${{ matrix.platform }} ${{ matrix.version }} (JDK ${{ matrix.jdk }})
+    needs: matrix-prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.matrix-prep.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Build JDK. The per-lane RUNTIME JDK (matrix.jdk) is auto-provisioned by
+      # the foojay toolchain resolver into ~/.gradle/jdks and cached below.
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Cache provisioned toolchains (lane runtime JDK ${{ matrix.jdk }})
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/jdks
+          key: ${{ runner.os }}-gradle-jdks-${{ matrix.jdk }}-${{ hashFiles('gradle/libs.versions.toml', 'settings.gradle.kts') }}
+
+      # run-paper (xyz.jpenilla.run-task) downloads server jars into
+      # ~/.gradle/caches/run-task-jars/<platform>/jars/<version>/ — outside
+      # setup-gradle's cache scope, so cache it per platform+version.
+      - name: Cache downloaded server jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches/run-task-jars
+          key: run-task-jars-${{ matrix.platform }}-${{ matrix.version }}
+
+      # Task naming (core/build.gradle.kts): runIntegrationTest + ('Folia_' for
+      # folia lanes, '_' otherwise) + version with dots as underscores,
+      # e.g. runIntegrationTest_1_20_6, runIntegrationTestFolia_26_1_2.
+      - name: Run integration lane
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          SUFFIX="_${VERSION//./_}"
+          if [ "$PLATFORM" = "folia" ]; then
+            SUFFIX="Folia_${VERSION//./_}"
+          fi
+          echo "Running runIntegrationTest${SUFFIX}"
+          ./gradlew "runIntegrationTest${SUFFIX}" --stacktrace
+
+      - name: Upload server logs (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs-${{ matrix.platform }}-${{ matrix.version }}
+          path: run/${{ matrix.platform }}/${{ matrix.version }}/logs
+          retention-days: 7

@@ -1,0 +1,62 @@
+# CodeQL static analysis for the Java/Kotlin sources.
+#
+# build-mode: none — CodeQL scans Java without invoking Gradle (supported for
+# java-kotlin with codeql-action v3). That keeps this workflow
+# independent of the JDK-25 toolchain and the verification-gate pipeline, and
+# means no setup-java/Gradle bootstrap is needed here.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/src/**'
+      - '**/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/libs.versions.toml'
+      - '.github/workflows/codeql.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/src/**'
+      - '**/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/libs.versions.toml'
+      - '.github/workflows/codeql.yml'
+  schedule:
+    # Weekly sweep, Monday 05:00 UTC — catches newly published queries even
+    # when the code has not changed.
+    - cron: '0 5 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (java-kotlin)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          build-mode: none
+          queries: security-and-quality
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:java-kotlin'

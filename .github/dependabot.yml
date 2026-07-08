@@ -1,0 +1,48 @@
+# Dependabot configuration.
+#
+# CRITICAL — the Java-8-line storage stack is spec-pinned (docs/ARCHITECTURE.md
+# AM-10) and MUST NOT be bumped: HikariCP 4.0.3, H2 1.4.200, and
+# mysql-connector-j 8.0.33 are the last lines whose bytecode loads on the
+# Java 8 base tier of the mega-jar. Any newer major/minor/patch line raises
+# the class-file floor and breaks 1.7.10–1.16.5 hosts. Likewise the
+# xyz.wagyourtail.jvmdowngrader plugin is load-bearing pinned at 1.3.6 (the
+# downgrade + warning-capture behavior is verified against that exact version
+# by the verifyDowngrade gate). Dependabot must never propose updates to these.
+
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+    ignore:
+      # AM-10 pinned storage stack — ignore ALL update types.
+      - dependency-name: 'com.zaxxer:HikariCP'
+      - dependency-name: 'com.h2database:h2'
+      - dependency-name: 'com.mysql:mysql-connector-j'
+      # Load-bearing pinned downgrader plugin (1.3.6) — covers the plugin id
+      # and its Gradle plugin-marker artifact.
+      - dependency-name: 'xyz.wagyourtail.jvmdowngrader*'
+    groups:
+      # Batch low-risk bumps for everything not ignored above.
+      gradle-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch

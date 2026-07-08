@@ -13,3 +13,5 @@ run/
 .project
 .classpath
 local.properties
+# jqwik property-test seed database (regenerated per run)
+.jqwik-database
