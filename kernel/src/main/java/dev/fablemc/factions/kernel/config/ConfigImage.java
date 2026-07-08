@@ -73,7 +73,7 @@ public record ConfigImage(
                           String githubOwner, String githubRepo) {
         /** Reference defaults (shipped {@code enabled}/{@code notify} = true). */
         public static Updates defaults() {
-            return new Updates(true, true, "pvpindex-factions", "PVP-Index", "pvpindex-factions");
+            return new Updates(true, true, "fablefactions", "fablemc", "FableFactions");
         }
     }
 

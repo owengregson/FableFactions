@@ -39,7 +39,7 @@ public final class ChestCodec {
                 Wire.writeString(o, x.name());
                 o.writeLong(x.blobRef());
             }
-            default -> throw new IllegalStateException("not a chest tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.CHEST);
         }
     }
 
@@ -53,7 +53,7 @@ public final class ChestCodec {
             case CHEST_CONTENTS_CHANGED ->
                     new ChestEffect.ChestContentsChanged(seq, origin, in.readInt(), Wire.readString(in),
                             in.readLong());
-            default -> throw new IllegalStateException("not a chest tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.CHEST);
         };
     }
 }

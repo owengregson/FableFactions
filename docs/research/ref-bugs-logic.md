@@ -1,7 +1,7 @@
-# PvPIndex-Factions — Game-Logic & Math Bug Catalog
+# reference-Factions — Game-Logic & Math Bug Catalog
 
 Adversarial audit of `command/`, `service/`, `engine/`, `integration/` in
-`/Users/owengregson/Documents/pvpindex-factions`. Every entry below is a defect the
+`(reference implementation source)`. Every entry below is a defect the
 FableFactions clean-room rewrite must avoid **by design**. Severities: **critical** (dupe /
 money creation / privesc / data corruption), **high** (protection bypass / feature broken /
 fund loss), **medium** (exploitable balance / race), **low** (UX / latent).

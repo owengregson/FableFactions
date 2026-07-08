@@ -1,6 +1,6 @@
-# PvPIndex Factions — Resources & Config Behavior Spec
+# the reference implementation — Resources & Config Behavior Spec
 
-Clean-room reimplementation reference for **FableFactions**. Source of truth: `pvpindex-factions/src/main/resources/**` plus `pvpindex-factions/docs/**`. This document captures every config key (with default + semantics), the full `plugin.yml` command/permission tree, the complete `messages_en.yml` key inventory (exact English strings + placeholder tokens), `gui.yml` layout semantics, `roles.yml`, `notifications.yml` routing, `database.yml`, `pre-defined.yml`, and behavior revealed only in `/docs`.
+Clean-room reimplementation reference for **FableFactions**. Source of truth: `the reference implementation/src/main/resources/**` plus `the reference implementation/docs/**`. This document captures every config key (with default + semantics), the full `plugin.yml` command/permission tree, the complete `messages_en.yml` key inventory (exact English strings + placeholder tokens), `gui.yml` layout semantics, `roles.yml`, `notifications.yml` routing, `database.yml`, `pre-defined.yml`, and behavior revealed only in `/docs`.
 
 > **Localization contract:** 8 locale bundles ship: `en, es, de, fr, pt-BR, ja, zh, ru` under `messages/messages_<locale>.yml`. Every non-en bundle MUST carry the identical key set to `en` (27 top-level groups). Values use **MiniMessage** formatting. Placeholders in `{curly}` form must be preserved verbatim in every translation. Lookup order: (1) player-selected locale via `/f language <code>`, (2) server default `factions.language.default`, (3) `en`, (4) inline Java fallback string.
 
@@ -210,7 +210,7 @@ Soft-integration toggles; plugin checks provider at startup and gracefully disab
 | `integrations.worldguard` | `true` | WorldGuard integration. |
 | `integrations.worldguard-sync-regions` | `false` | Mirror claim chunks as WG `ProtectedCuboidRegion`s so WG does native block protection (no per-event DB query). Requires WG. Restart to toggle. See §12. |
 | `integrations.dynmap` | `true` | Dynmap territory layer (marker set id `factions`). |
-| `integrations.placeholderapi` | `true` | Register `pvpindex` PAPI expansion. |
+| `integrations.placeholderapi` | `true` | Register `reference` PAPI expansion. |
 | `integrations.essentialsx.enabled` | `false` | Route `/f home` and `/f warp` through EssentialsX async teleport (respects delay/safety; records `/back`; blocks while jailed). Requires EssentialsX 2.19+. |
 | `integrations.lwc.enabled` | `true` | Master toggle for LWC/LWCX interop. |
 | `integrations.lwc.require-build-rights-to-create` | `true` | Block creating protections when creator lacks build rights. |
@@ -235,7 +235,7 @@ Changes require restart. `type: h2` (default) = embedded file DB in MySQL-compat
 | Key | Default | Semantics |
 |---|---|---|
 | `type` | `h2` | `h2` or `mysql`. |
-| `h2.file` | `data/factions` | Path relative to plugin data folder (`plugins/PvPIndexFactions/`). |
+| `h2.file` | `data/factions` | Path relative to plugin data folder (`plugins/ReferenceFactions/`). |
 | `mysql.host` | `localhost` | |
 | `mysql.port` | `3306` | |
 | `mysql.database` | `factions` | |
@@ -305,11 +305,11 @@ Global role defaults & limits. Per-faction override behavior gated by `roles.ove
 ## 6. `plugin.yml`
 
 ```
-name: PvPIndexFactions
-main: com.pvpindex.factions.PvPIndexFactions
+name: ReferenceFactions
+main: com.reference.factions.ReferenceFactions
 api-version: '1.21'
 folia-supported: true
-website: https://modrinth.com/plugin/pvpindex-factions
+website: https://modrinth.com/plugin/the reference implementation
 ```
 Authors: Shadow48402 (+ original MassiveCraft Factions authors: Madus, Cayorion, Ulumulu1510, MarkehMe, Brettflan).
 
@@ -576,20 +576,20 @@ Present as a top-level key but **empty/null** in `messages_en.yml` (file ends wi
 
 ---
 
-## 10. PlaceholderAPI expansion (`pvpindex`)
+## 10. PlaceholderAPI expansion (`reference`)
 
 Registered when PlaceholderAPI present + `integrations.placeholderapi: true`.
 
 | Placeholder | Returns | Not-in-faction default |
 |---|---|---|
-| `%pvpindex_faction_name%` | faction name | `None` |
-| `%pvpindex_faction_power%` | summed member power (integer string) | `0` |
-| `%pvpindex_faction_members%` | member count | `0` |
-| `%pvpindex_faction_land%` | claimed chunk count | `0` |
-| `%pvpindex_faction_bank%` | bank balance (numeric string) | `0.0` |
-| `%pvpindex_player_power%` | current player power | — |
-| `%pvpindex_player_role%` | role name | `None` |
-| `%pvpindex_player_role_prefix%` | role prefix | empty string |
+| `%fable_faction_name%` | faction name | `None` |
+| `%fable_faction_power%` | summed member power (integer string) | `0` |
+| `%fable_faction_members%` | member count | `0` |
+| `%fable_faction_land%` | claimed chunk count | `0` |
+| `%fable_faction_bank%` | bank balance (numeric string) | `0.0` |
+| `%fable_player_power%` | current player power | — |
+| `%fable_player_role%` | role name | `None` |
+| `%fable_player_role_prefix%` | role prefix | empty string |
 
 Unresolvable → empty value.
 

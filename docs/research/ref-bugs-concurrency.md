@@ -1,9 +1,9 @@
-# pvpindex-factions — Concurrency, Persistence & Lifecycle Bug Catalog
+# the reference implementation — Concurrency, Persistence & Lifecycle Bug Catalog
 
 Adversarial audit of `engine/`, `scheduler/`, `data/`, `service/`, `bootstrap/` (plus the command dispatch
 and main-plugin lifecycle that drive them). Purpose: enumerate defects so the **FableFactions** clean-room
 rewrite avoids them **by design**. Line numbers are from the original source at
-`/Users/owengregson/Documents/pvpindex-factions`.
+`(reference implementation source)`.
 
 ---
 

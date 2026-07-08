@@ -48,7 +48,7 @@ public final class PowerCodec {
                 o.writeInt(x.faction());
                 o.writeBoolean(x.nowRaidable());
             }
-            default -> throw new IllegalStateException("not a power tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.POWER);
         }
     }
 
@@ -64,7 +64,7 @@ public final class PowerCodec {
                     new PowerEffect.DeathStreakAdvanced(seq, origin, Wire.readUuid(in), in.readInt());
             case RAIDABLE_CHANGED ->
                     new PowerEffect.RaidableChanged(seq, origin, in.readInt(), in.readBoolean());
-            default -> throw new IllegalStateException("not a power tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.POWER);
         };
     }
 }

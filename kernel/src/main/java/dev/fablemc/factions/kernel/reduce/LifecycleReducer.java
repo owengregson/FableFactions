@@ -1,90 +1,28 @@
 package dev.fablemc.factions.kernel.reduce;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.SplittableRandom;
 import java.util.UUID;
 
-import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
-import dev.fablemc.factions.kernel.config.BakedTables;
-import dev.fablemc.factions.kernel.config.PowerConfig;
-import dev.fablemc.factions.kernel.effect.Effect;
-import dev.fablemc.factions.kernel.ids.ChunkKeys;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.RoleEffect;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
-import dev.fablemc.factions.kernel.intent.Intent;
-import dev.fablemc.factions.kernel.intent.IntentEnvelope;
-import dev.fablemc.factions.kernel.intent.Origin;
-import dev.fablemc.factions.kernel.msg.MessageKey;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
-import dev.fablemc.factions.kernel.rules.ChestRules;
-import dev.fablemc.factions.kernel.rules.ClaimRules;
 import dev.fablemc.factions.kernel.rules.DisbandRules;
-import dev.fablemc.factions.kernel.rules.EconomyRules;
 import dev.fablemc.factions.kernel.rules.FactionAggregates;
 import dev.fablemc.factions.kernel.rules.FactionEdit;
-import dev.fablemc.factions.kernel.rules.InviteRules;
 import dev.fablemc.factions.kernel.rules.MergeRules;
 import dev.fablemc.factions.kernel.rules.MoneyMath;
 import dev.fablemc.factions.kernel.rules.NameRules;
-import dev.fablemc.factions.kernel.rules.PowerMath;
-import dev.fablemc.factions.kernel.rules.PrefRules;
-import dev.fablemc.factions.kernel.rules.RelationRules;
 import dev.fablemc.factions.kernel.rules.RoleRules;
-import dev.fablemc.factions.kernel.rules.TravelRules;
-import dev.fablemc.factions.kernel.state.ChestRef;
-import dev.fablemc.factions.kernel.state.ChestTable;
-import dev.fablemc.factions.kernel.state.EscrowTable;
 import dev.fablemc.factions.kernel.state.Faction;
-import dev.fablemc.factions.kernel.state.FactionArena;
 import dev.fablemc.factions.kernel.state.FactionClaimList;
-import dev.fablemc.factions.kernel.state.Home;
-import dev.fablemc.factions.kernel.state.InviteTable;
-import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.MergeTable;
 import dev.fablemc.factions.kernel.state.NameIndex;
-import dev.fablemc.factions.kernel.state.PlayerLedger;
 import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.RelationEdges;
-import dev.fablemc.factions.kernel.state.RelationKind;
 import dev.fablemc.factions.kernel.state.Warp;
-import dev.fablemc.factions.kernel.state.WarpTable;
-import dev.fablemc.factions.kernel.state.ZoneStats;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.PowerSource;
+import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.PagePhase;
-import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
-import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
-import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
-import dev.fablemc.factions.kernel.vocab.EscrowKind;
-import dev.fablemc.factions.kernel.vocab.BroadcastScope;
-import dev.fablemc.factions.kernel.vocab.BankTxType;
-import dev.fablemc.factions.kernel.intent.TravelIntent;
-import dev.fablemc.factions.kernel.intent.SystemIntent;
-import dev.fablemc.factions.kernel.intent.SessionIntent;
-import dev.fablemc.factions.kernel.intent.RoleIntent;
-import dev.fablemc.factions.kernel.intent.RelationIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.MembershipIntent;
-import dev.fablemc.factions.kernel.intent.LifecycleIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
-import dev.fablemc.factions.kernel.intent.ClaimIntent;
-import dev.fablemc.factions.kernel.intent.ChestIntent;
-import dev.fablemc.factions.kernel.effect.TravelEffect;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.SessionEffect;
-import dev.fablemc.factions.kernel.effect.RoleEffect;
-import dev.fablemc.factions.kernel.effect.RelationEffect;
-import dev.fablemc.factions.kernel.effect.PrefEffect;
-import dev.fablemc.factions.kernel.effect.PowerEffect;
-import dev.fablemc.factions.kernel.effect.MembershipEffect;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
-import dev.fablemc.factions.kernel.effect.ExternalEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
-import dev.fablemc.factions.kernel.effect.ChestEffect;
-import dev.fablemc.factions.kernel.effect.AuditEffect;
 
 /**
  * Lifecycle intents: create / disband (paged) / rename / description / motd / ownership transfer / merge (paged).
@@ -157,7 +95,7 @@ final class LifecycleReducer {
                 .withRankIdx(ownerOrd, ownerRankIdx)
                 .withJoinedAt(ownerOrd, s.epochMillis));
 
-        s.effects.add(new LifecycleEffect.FactionCreated(s.seq, s.origin, handle, id, c.name()));
+        s.emit(new LifecycleEffect.FactionCreated(s.seq, s.origin, handle, id, c.name()));
     }
 
     static Rank[] defaultRanks(ReduceSupport s) {
@@ -195,7 +133,7 @@ final class LifecycleReducer {
             s.state = s.state.withFactionNames(
                     s.state.factionNames().without(f.nameFolded()).with(newFold, f.idx()));
         }
-        s.effects.add(new LifecycleEffect.FactionRenamed(s.seq, s.origin, c.faction(), oldName, c.newName()));
+        s.emit(new LifecycleEffect.FactionRenamed(s.seq, s.origin, c.faction(), oldName, c.newName()));
     }
 
     static void setDescription(ReduceSupport s, LifecycleIntent.SetDescription c) {
@@ -210,7 +148,7 @@ final class LifecycleReducer {
             return;
         }
         s.replaceFaction(FactionEdit.withDescription(f, d));
-        s.effects.add(new LifecycleEffect.DescriptionChanged(s.seq, s.origin, c.faction(), d));
+        s.emit(new LifecycleEffect.DescriptionChanged(s.seq, s.origin, c.faction(), d));
     }
 
     static void setMotd(ReduceSupport s, LifecycleIntent.SetMotd c) {
@@ -221,7 +159,7 @@ final class LifecycleReducer {
         }
         String m = c.motd() == null ? "" : c.motd();
         s.replaceFaction(FactionEdit.withMotd(f, m));
-        s.effects.add(new LifecycleEffect.MotdChanged(s.seq, s.origin, c.faction(), m));
+        s.emit(new LifecycleEffect.MotdChanged(s.seq, s.origin, c.faction(), m));
         s.audit(c.faction(), c.actor(), FactionAuditAction.MOTD_SET, m);
     }
 
@@ -248,12 +186,12 @@ final class LifecycleReducer {
         int oldOwnerOrd = oldOwner == null ? -1 : s.memberOrd(oldOwner);
         if (oldOwnerOrd >= 0 && s.state.ledger().has(oldOwnerOrd)) {
             s.state = s.state.withLedger(s.state.ledger().withRankIdx(oldOwnerOrd, officerRankIdx));
-            s.effects.add(new RoleEffect.RankChanged(s.seq, s.origin, c.faction(), oldOwner, officerRankIdx));
+            s.emit(new RoleEffect.RankChanged(s.seq, s.origin, c.faction(), oldOwner, officerRankIdx));
         }
         s.state = s.state.withLedger(s.state.ledger().withRankIdx(newOwnerOrd, ownerRankIdx));
         s.replaceFaction(FactionEdit.withOwner(f, c.newOwner()));
-        s.effects.add(new RoleEffect.RankChanged(s.seq, s.origin, c.faction(), c.newOwner(), ownerRankIdx));
-        s.effects.add(new LifecycleEffect.OwnershipTransferred(s.seq, s.origin, c.faction(), oldOwner, c.newOwner()));
+        s.emit(new RoleEffect.RankChanged(s.seq, s.origin, c.faction(), c.newOwner(), ownerRankIdx));
+        s.emit(new LifecycleEffect.OwnershipTransferred(s.seq, s.origin, c.faction(), oldOwner, c.newOwner()));
     }
 
     static void sendMergeRequest(ReduceSupport s, LifecycleIntent.SendMergeRequest c) {
@@ -266,7 +204,7 @@ final class LifecycleReducer {
         Faction target = s.resolve(c.target());
         s.state = s.state.withMergeRequests(s.state.mergeRequests().add(
                 new MergeTable.MergeRequest(s.seq, sender.idx(), target.idx(), c.actor(), s.epochMillis)));
-        s.effects.add(new LifecycleEffect.MergeRequested(s.seq, s.origin, c.sender(), c.target()));
+        s.emit(new LifecycleEffect.MergeRequested(s.seq, s.origin, c.sender(), c.target()));
         s.audit(c.sender(), c.actor(), FactionAuditAction.MERGE_REQUEST, target.name());
     }
 
@@ -323,7 +261,7 @@ final class LifecycleReducer {
             s.refundFactionEscrows(senderOrd);
             s.state = s.state.withFactionNames(s.state.factionNames().without(sender.nameFolded()));
             s.state = s.state.withFactions(s.state.factions().freed(senderOrd));
-            s.effects.add(new LifecycleEffect.MergeCompleted(s.seq, s.origin, c.sender(), c.target(), 0, 0,
+            s.emit(new LifecycleEffect.MergeCompleted(s.seq, s.origin, c.sender(), c.target(), 0, 0,
                     bankMoved));
             s.audit(c.target(), c.actor(), FactionAuditAction.MERGE_ACCEPT, sender.name());
         }
@@ -380,7 +318,7 @@ final class LifecycleReducer {
             s.refundFactionEscrows(ord);
             s.state = s.state.withFactionNames(s.state.factionNames().without(f.nameFolded()));
             s.state = s.state.withFactions(s.state.factions().freed(ord));
-            s.effects.add(new LifecycleEffect.FactionDisbanded(s.seq, s.origin, c.faction(), f.name()));
+            s.emit(new LifecycleEffect.FactionDisbanded(s.seq, s.origin, c.faction(), f.name()));
         }
     }
 }

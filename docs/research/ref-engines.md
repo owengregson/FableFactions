@@ -1,9 +1,9 @@
 # FableFactions Spec — Engines, Bukkit Events & Schedulers
 
-Clean-room behavioral spec for the `engine`, `event`, and `scheduler` packages of `pvpindex-factions`.
+Clean-room behavioral spec for the `engine`, `event`, and `scheduler` packages of `the reference implementation`.
 An implementer who has never seen the source must be able to reproduce every behavior below exactly.
 
-Package roots (original): `com.pvpindex.factions.{engine,event,scheduler}`.
+Package roots (original): `com.reference.factions.{engine,event,scheduler}`.
 
 ---
 

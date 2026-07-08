@@ -23,11 +23,16 @@ import dev.fablemc.factions.kernel.state.KernelState;
  * The single mutation point of the kernel: {@code (state, envelope) -> (state', effects)}
  * (CONTRACTS §2, proposal-C §4.4). Replaces the Wave-1 placeholder.
  *
+ * <p><b>Owning thread(s):</b> the {@code fable-kernel} writer only. <b>Mutability:</b> stateless
+ * (static dispatch); all working state is a per-call confined {@link ReduceSupport}.
+ * <b>Reducer rule:</b> this IS the reducer — the only code allowed to produce a new
+ * {@code KernelState}.
+ *
  * <p>PURE: no IO, no clock, no Bukkit, no statics. All nondeterminism comes from the envelope
- * ({@code epochMillis}, {@code tick}, {@code rngSeed}). Runs only on the {@code fable-kernel} writer
- * thread. The per-domain reduction logic lives in the package-private {@code XxxReducer} classes
- * (W25-REORG P2a split this class into a dispatcher over the intent sub-interfaces); the shared
- * working context and common helpers live in {@link ReduceSupport}.
+ * ({@code epochMillis}, {@code tick}, {@code rngSeed}). The per-domain reduction logic lives in
+ * the package-private {@code XxxReducer} classes (W25-REORG P2a split this class into a
+ * dispatcher over the intent sub-interfaces); the shared working context and common helpers live
+ * in {@link ReduceSupport}.
  *
  * <p>This dispatcher switches on the intent SUB-INTERFACE and delegates to the owning domain
  * reducer, which switches on the concrete record. An unrecognised intent throws, which the writer's
@@ -83,7 +88,7 @@ public final class Reducer {
         } else {
             throw new IllegalStateException("unhandled intent: " + i.getClass().getName());
         }
-        return new Outcome(s.state, s.effects);
+        return s.outcome();
     }
 
     /** The reducer's result: the next state plus the ordered effects it produced. */

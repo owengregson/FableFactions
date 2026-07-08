@@ -9,10 +9,12 @@ import java.util.UUID;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
+import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 
 /**
  * Primitive read/write helpers shared by the per-domain journal codecs (W25-REORG §P2b). Every
- * field encoding lives here exactly once so the domain codecs read as a flat field list.
+ * field encoding lives here exactly once — always as a write/read PAIR, so a wire-format mismatch
+ * is visible on adjacent lines — and the domain codecs read as a flat field list.
  *
  * <p>Strings are length-prefixed UTF-8 (nullable via a {@code -1} length), so {@code TEXT}-sized
  * descriptions are not bound by {@code DataOutputStream.writeUTF}'s 64&nbsp;KB limit. {@link UUID}s
@@ -138,8 +140,20 @@ public final class Wire {
         return a;
     }
 
+    public static void writeReasonCode(DataOutputStream o, ReasonCode r) throws IOException {
+        writeString(o, r == null ? null : r.name());
+    }
+
     public static ReasonCode readReasonCode(DataInputStream in) throws IOException {
         String name = readString(in);
         return name == null ? null : ReasonCode.valueOf(name);
+    }
+
+    public static void writeAuditAction(DataOutputStream o, FactionAuditAction a) throws IOException {
+        writeString(o, a == null ? null : a.id());
+    }
+
+    public static FactionAuditAction readAuditAction(DataInputStream in) throws IOException {
+        return FactionAuditAction.fromId(readString(in));
     }
 }

@@ -176,10 +176,12 @@ public enum EffectTag {
 
     private final int code;
     private final Class<? extends Effect> type;
+    private final Domain domain;   // resolved eagerly: a code outside every range fails class init
 
     EffectTag(int code, Class<? extends Effect> type) {
         this.code = code;
         this.type = type;
+        this.domain = Domain.of(code);
     }
 
     /** The stable {@code u16} wire tag persisted in the WAL framing. */
@@ -194,7 +196,15 @@ public enum EffectTag {
 
     /** The per-domain range this tag falls in — the framing's encode/decode dispatch key. */
     public Domain domain() {
-        return Domain.of(code);
+        return domain;
+    }
+
+    /**
+     * The standardized rejection a per-domain codec throws when routed a tag outside its range
+     * (its switch {@code default} arm — unreachable unless the framing dispatch drifts).
+     */
+    public IllegalStateException outside(Domain expected) {
+        return new IllegalStateException("tag " + this + " is " + domain + ", not " + expected);
     }
 
     /** The tag for a wire {@code code}, or {@code null} if the code is unknown (corrupt/newer). */
@@ -207,9 +217,14 @@ public enum EffectTag {
         return BY_CLASS.get(type);
     }
 
-    /** The tag for an effect instance, or {@code null} if its record class is untagged (control). */
-    public static EffectTag of(Effect e) {
-        return BY_CLASS.get(e.getClass());
+    /** The tag for an effect that MUST journal; throws for an untagged (control) record class. */
+    public static EffectTag require(Effect e) {
+        EffectTag tag = BY_CLASS.get(e.getClass());
+        if (tag == null) {
+            throw new IllegalStateException("no journal tag registered for effect "
+                    + e.getClass().getName());
+        }
+        return tag;
     }
 
     /** An immutable view of every tag's record class (package-visible for the codec + its tests). */

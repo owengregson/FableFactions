@@ -47,7 +47,7 @@ public final class TravelCodec {
                 Wire.writeString(o, x.name());
                 o.writeDouble(x.cost());
             }
-            default -> throw new IllegalStateException("not a travel tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.TRAVEL);
         }
     }
 
@@ -65,7 +65,7 @@ public final class TravelCodec {
             case WARP_COST_SET ->
                     new TravelEffect.WarpCostSet(seq, origin, in.readInt(), Wire.readString(in),
                             in.readDouble());
-            default -> throw new IllegalStateException("not a travel tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.TRAVEL);
         };
     }
 }

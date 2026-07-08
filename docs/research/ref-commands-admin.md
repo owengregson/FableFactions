@@ -1,6 +1,6 @@
 # FableFactions Spec — Admin, Power, Flag, Role & Relation Commands
 
-Clean-room behavioral spec derived from `pvpindex-factions`. Covers the command packages
+Clean-room behavioral spec derived from `the reference implementation`. Covers the command packages
 `command/sub/admin`, `command/sub/power`, `command/sub/flag`, `command/sub/role`,
 `command/sub/relation` plus the parent `CmdRelation`, `CmdRole`, `CmdFlag` group commands and
 all supporting types (`FactionFlag`, `Relation`, `FactionAuditAction`, `RankModel`,
@@ -165,7 +165,7 @@ in the shipped file, but code defaults for those getters are as above (shipped f
   1. `plugin.reloadConfig()`.
   2. Ensure `roles.yml` exists in data folder (else `saveResource("roles.yml", false)`).
   3. Build new `FactionsConfig(plugin.getConfig(), YamlConfiguration.loadConfiguration(rolesFile))`.
-  4. If plugin is `PvPIndexFactions` with non-null bootstrap: `infraRegistry.setConfig(newConfig)` then `bootstrap.reloadServices()`. If services reload fails, log warning `"Failed to restart services during /fa reload; a plugin restart may be required."`.
+  4. If plugin is `ReferenceFactions` with non-null bootstrap: `infraRegistry.setConfig(newConfig)` then `bootstrap.reloadServices()`. If services reload fails, log warning `"Failed to restart services during /fa reload; a plugin restart may be required."`.
   5. Resolve default locale: `plugin.getConfig().getString("factions.language.default", "en")` (fallback to `config.getDefaultLanguage()` else `"en"`).
   6. Reload messages: ensure `messages/` dir exists; for each shipped locale in `{en, es, de, fr, pt-BR, zh, ru, ja}` save resource `messages/messages_{locale}.yml` if absent; load every `messages_*.yml` in that dir into a map keyed by `MessagesConfig.normalizeLocale(rawLocaleFromFilename)`; construct `MessagesConfig(bundles, defaultLocale)`, `setRepositories(repos)`, and `MsgUtil.setMessagesConfig(...)`.
   7. If `PredefinedConfigManager` instance non-null → `predefined.reload()`.

@@ -3,7 +3,7 @@
 **Status: NORMATIVE for all implementation agents.** This pins (1) the module/package/file
 tree with ownership boundaries, (2) every type signature that crosses an agent boundary,
 (3) conventions. `docs/ARCHITECTURE.md` governs design intent; `docs/design/proposal-C.md`
-supplies detail where both are silent; `docs/research/pvp-*.md` are the behavior parity
+supplies detail where both are silent; `docs/research/ref-*.md` are the behavior parity
 specs. When you implement a file, its behavior spec citation is in your work order.
 
 Java level: language 17 (records, sealed, switch patterns OK; **no** Java 18+ APIs — the jar
@@ -140,7 +140,7 @@ public final class Reducer {
 }
 ```
 
-`ConfigImage` sections carry every key from `pvp-resources.md` §config inventory as typed
+`ConfigImage` sections carry every key from `ref-resources.md` §config inventory as typed
 fields with reference defaults; aliased keys collapse to one canonical field at parse
 (parser lives in `:core`; `ConfigImage` is pure data + `BakedTables`).
 
@@ -241,7 +241,7 @@ core/src/main/java/dev/fablemc/factions/core/
   journal/    EffectJournal.java  JournalCodec.java  JournalReplay.java
   storage/    StorageProjector.java  Schema.java  SchemaMigrator.java  SqlDialect.java
               H2Dialect.java  MySqlDialect.java  BaselineLoader.java  AdvisoryLock.java
-              PvpIndexImporter.java  Blobs.java
+              the (removed) legacy importer.java  Blobs.java
   text/       Messages.java            (render MessageKey+args → Component → TextPort)
   messages/   MessageCatalog.java  LocaleTables.java
   config/     ConfigParser.java  ConfigFiles.java  OverlayStore.java
@@ -298,7 +298,7 @@ public final class Messages {   // the ONLY consumer of MessageCatalog at runtim
     public Component render(byte localeIdx, MessageKey key, String... args);
 }
 
-// Command framework contract (parity with reference framework, pvp-commands-core.md):
+// Command framework contract (parity with reference framework, ref-commands-core.md):
 public abstract class CommandNode {
     protected CommandNode(String name, String... aliases);
     // permission(), requiredArgs, optionalArgs, requiresPlayer, children — builder style
@@ -343,12 +343,12 @@ UUID, org.bukkit.Location, enums defined in `:api`).
 
 ## 6. Conventions that keep 8 agents compatible
 
-1. **Message keys**: exact reference key set (`pvp-resources.md` inventory). New keys (D-9)
+1. **Message keys**: exact reference key set (`ref-resources.md` inventory). New keys (D-9)
    use the same section naming (`general.*`, `commands.<cmd>.*`, `power.*`, `territory.*`,
    `bank.*`, `relations.*`, `roles.*`, `chest.*`, `warp.*`, `merge.*`, `admin.*`,
    `predefined.*`, `gui.*`, `update.*`, `custom.*`).
 2. **Permissions**: reference tree (`factions.cmd.<name>[.<sub>]`, `factions.admin`,
-   `factions.bypass`, defaults per `pvp-resources.md` §plugin.yml).
+   `factions.bypass`, defaults per `ref-resources.md` §plugin.yml).
 3. **Config keys**: reference tree exactly; canonical-alias rule per AM-14/proposal-C §9.1.
 4. **Errors**: kernel rejections are `ReasonCode`s mapping 1:1 to message keys; command
    layer never invents text.
@@ -387,4 +387,12 @@ UUID, org.bukkit.Location, enums defined in `:api`).
    Wave 2a REPLACES it (documented ownership handoff).
 6. The scaffold's `core/build.gradle.kts` gate wiring, relocations, and ignore lists are
    final — do not touch them without a work order saying so.
+7. **FableFactions is a standalone project.** No reference-implementation tokens
+   ("pvpindex" in any casing) may appear anywhere in the repo; there is NO legacy importer
+   and none may be added; PlaceholderAPI ships `%fable_<param>%` only (no compat aliases);
+   the dynmap layer id is `fablefactions`; the update checker points at
+   fablefactions/fablemc/FableFactions. Behavior-parity research lives in
+   `docs/research/ref-*.md` (renamed from pvp-*.md) and refers only to "the reference
+   implementation". `RowJson` (formerly LegacyImportSupport) parses OUR schema's JSON
+   columns for the BaselineLoader.
 ```

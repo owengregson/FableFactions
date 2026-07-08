@@ -5,8 +5,8 @@
 and a unanimous 3-judge verdict: **Proposal C — the Deterministic Kernel — wins**, amended by
 the fixes and grafts below. Where this document is silent, `docs/design/proposal-C.md` applies
 verbatim. Where they conflict, THIS document wins. Research ground truth lives in
-`docs/research/` (feature parity: `pvp-*.md`; build recipe: `mental-build.md`; seam patterns:
-`mental-seam.md`; version facts: `version-deltas.md`; bug catalogs: `pvp-bugs-*.md`).
+`docs/research/` (feature parity: `ref-*.md`; build recipe: `mental-build.md`; seam patterns:
+`mental-seam.md`; version facts: `version-deltas.md`; bug catalogs: `ref-bugs-*.md`).
 
 Identity: plugin `FableFactions`, package root `dev.fablemc.factions`, commands `/f` + `/fa`,
 one Multi-Release mega-jar spanning PaperSpigot 1.7.10 → Paper/Folia 26.1.2.
@@ -224,8 +224,8 @@ modules. Dependency direction strict: `kernel ← api ← platform ← core ← 
 
 ## 4. Feature parity contract
 
-The complete WHAT is the reference feature set documented in `docs/research/pvp-commands-*.md`,
-`pvp-engines.md`, `pvp-services.md`, `pvp-integrations.md`, `pvp-resources.md` — every
+The complete WHAT is the reference feature set documented in `docs/research/ref-commands-*.md`,
+`ref-engines.md`, `ref-services.md`, `ref-integrations.md`, `ref-resources.md` — every
 command, alias, permission node, config key, message key, GUI menu, integration behavior,
 placeholder, event, and scheduler cadence. Proposal C §12's feature→module map + deviation
 register (D-1…D-15) is adopted verbatim as the parity proof, with deviations config-gated to

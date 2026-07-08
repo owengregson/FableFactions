@@ -1,8 +1,8 @@
 # Hostile Correctness & Concurrency Critique — Proposal B (Frozen-Seam Architecture)
 
 Reviewer stance: concurrency specialist, adversarial. I attacked `docs/design/proposal-B.md`
-against every bug class catalogued in `docs/research/pvp-bugs-concurrency.md` (C-BUG-n) and
-`docs/research/pvp-bugs-logic.md` (L-BUG-n). For each I asked: does the design make the bug
+against every bug class catalogued in `docs/research/ref-bugs-concurrency.md` (C-BUG-n) and
+`docs/research/ref-bugs-logic.md` (L-BUG-n). For each I asked: does the design make the bug
 *structurally impossible*, or does it merely *assert* impossibility while leaving a reachable
 window? Verdict up front: the single-writer core is a genuinely strong idea and kills the
 lion's share of the RMW/lost-update catalog. But several load-bearing claims ("no

@@ -52,7 +52,7 @@ public final class ExternalCodec {
                 o.writeLong(x.key());
                 o.writeInt(x.newOwner());
             }
-            default -> throw new IllegalStateException("not an external tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.EXTERNAL);
         }
     }
 
@@ -73,7 +73,7 @@ public final class ExternalCodec {
             case LWC_PURGE_REQUESTED ->
                     new ExternalEffect.LwcPurgeRequested(seq, origin, in.readInt(), in.readLong(),
                             in.readInt());
-            default -> throw new IllegalStateException("not an external tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.EXTERNAL);
         };
     }
 }

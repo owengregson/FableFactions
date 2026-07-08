@@ -8,30 +8,29 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.ExternalEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
+import dev.fablemc.factions.kernel.intent.ChestIntent;
+import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.intent.Intent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.intent.MembershipIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.RelationIntent;
+import dev.fablemc.factions.kernel.intent.TravelIntent;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Kern.Session;
 import dev.fablemc.factions.kernel.state.KernelState;
-import dev.fablemc.factions.kernel.state.RelationKind;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
 import dev.fablemc.factions.kernel.vocab.ClaimMode;
-import dev.fablemc.factions.kernel.intent.TravelIntent;
-import dev.fablemc.factions.kernel.intent.RelationIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.MembershipIntent;
-import dev.fablemc.factions.kernel.intent.LifecycleIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
-import dev.fablemc.factions.kernel.intent.ClaimIntent;
-import dev.fablemc.factions.kernel.intent.ChestIntent;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.ExternalEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
+import dev.fablemc.factions.kernel.vocab.Relation;
 
 /** Saga-level pins: economy/escrow (AM-7), tax, zones, disband scrub (AM-6), merge, AM-5 paging. */
 class ReducerSagaTest {

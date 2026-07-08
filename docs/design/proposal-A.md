@@ -136,7 +136,7 @@ final class ClaimShard {                              // IMMUTABLE once publishe
 
 Effective relations are **symmetric by construction** (the wish handshake makes ally/truce
 mutual; enemy/neutral mirror unconditionally — same observable rules as the original, §6 of
-pvp-commands-admin). Therefore one global immutable table suffices:
+ref-commands-admin). Therefore one global immutable table suffices:
 
 ```java
 final class RelationSnapshot {          // volatile-published whole on any relation change
@@ -660,7 +660,7 @@ YAML is never re-serialized.
 ### 8.2 Messages / i18n
 
 `MessageCatalog`: 27 top-level groups × 8 locales (`en, es, de, fr, pt-BR, zh, ru, ja`),
-same keys as the reference (full inventory in pvp-resources §9), waterfall preferred →
+same keys as the reference (full inventory in ref-resources §9), waterfall preferred →
 default → en → inline fallback; `normalizeLocale` rules preserved (`pt-br`→`pt-BR`);
 per-player locale column + `/f language` + GUI language menu. Templates pre-parsed once
 (§6.3); `{token}` placeholders become TagResolvers; user strings inserted as literals.
@@ -702,7 +702,7 @@ toggle AND plugin present; one INFO line each way)
 |---|---|---|
 | **Vault** | typed impl behind `Class.forName("net.milkbowl.vault.economy.Economy")` guard class | `EconomyPort` with `reserve/settle/refund` — OfflinePlayer overloads only; consumed by bank, power buy, warp cost, create/claim costs. All charge paths are reserve→apply→settle with compensation (§5.1). |
 | **WorldGuard (+WorldEdit)** | typed `WorldGuardTerritoryGuard` behind factory; `NoopTerritoryGuard` default | `TerritoryGuard` checks for warp/home placement; **region-sync mode** (`worldguard-sync-regions`): claims mirrored as `ProtectedCuboidRegion`s, members added to domains, WG enforces at NORMAL, `BuildIntake` fast-allows synced regions, `AllyUnlockIntake` (HIGHEST, ignoreCancelled=false) un-cancels for mutual allies. Mirroring driven by post-commit effects; `syncAll` at boot. Restart to toggle (documented). |
-| **PlaceholderAPI** | typed `FactionsPlaceholders` behind presence check | expansion id `fablefactions` (+ legacy `pvpindex` param aliases for drop-in parity): faction_name/power/members/land/bank, player_power/role/role_prefix — all O(1) snapshot reads (PAPI calls can be hot). |
+| **PlaceholderAPI** | typed `FactionsPlaceholders` behind presence check | expansion id `fablefactions` (+ legacy `reference` param aliases for drop-in parity): faction_name/power/members/land/bank, player_power/role/role_prefix — all O(1) snapshot reads (PAPI calls can be hot). |
 | **EssentialsX** | typed interop behind factory | jail check, vanish check, optional teleport delegation; first-party warmup remains the default engine. |
 | **dynmap** | typed `DynmapLayer` | marker set from snapshot at boot (+1 tick), incremental updates from post-commit claim/unclaim/disband/rename effects, reference color palette preserved; all dynmap API calls on `runGlobal`. |
 | **DiscordSRV** | **reflection-only** notifier (JDA 4 message send) | faction-created/disbanded, relation ally/truce/enemy messages, channel-id config; fed by post-commit effects. |
@@ -845,7 +845,7 @@ FAIL).
 
 ## 14. How each catalogued bug class is made impossible
 
-Concurrency catalog (pvp-bugs-concurrency.md):
+Concurrency catalog (ref-bugs-concurrency.md):
 
 | Bug # | Class | Structural kill |
 |---|---|---|
@@ -867,7 +867,7 @@ Concurrency catalog (pvp-bugs-concurrency.md):
 | 22 | Transfer event after commit | All bank events fire pre-submit (phase A), cancellation/mutation honored uniformly. |
 | 23 | last_activity never written | Stamped by JoinQuit Ops; kernel pin asserts the inactivity exclusion actually excludes. |
 
-Logic catalog (pvp-bugs-logic.md):
+Logic catalog (ref-bugs-logic.md):
 
 | Bug # | Kill |
 |---|---|

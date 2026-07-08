@@ -69,7 +69,7 @@ public final class LifecycleCodec {
                 o.writeInt(x.claimMoves());
                 o.writeDouble(x.bankMoved());
             }
-            default -> throw new IllegalStateException("not a lifecycle tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.LIFECYCLE);
         }
     }
 
@@ -96,7 +96,7 @@ public final class LifecycleCodec {
             case MERGE_COMPLETED ->
                     new LifecycleEffect.MergeCompleted(seq, origin, in.readInt(), in.readInt(), in.readInt(),
                             in.readInt(), in.readDouble());
-            default -> throw new IllegalStateException("not a lifecycle tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.LIFECYCLE);
         };
     }
 }

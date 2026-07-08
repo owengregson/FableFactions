@@ -10,27 +10,17 @@ import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.RelationKind;
 
 /**
- * Dependency-free parsing + relation-folding helpers shared by {@code storage.load.BaselineLoader}
- * (loads FableFactions' own schema) and {@code storage.legacy.PvpIndexImporter} (imports the
- * reference PvPIndex schema).
+ * Parses the row-embedded JSON text columns ({@code relations_json}, {@code flags_json}) and
+ * folds declared relation <em>wishes</em> into <em>effective</em> symmetric edges for
+ * {@code storage.load.BaselineLoader}: an asymmetric ALLY/TRUCE wish stays a wish (effective
+ * only when mutual), while ENEMY is symmetric-max (one side's enmity makes both enemies).
+ * Keeping the fold rule in one place guarantees load paths can never diverge on it.
  *
- * <p>Both loaders read the same JSON-ish text columns (a faction's {@code relations_json} and
- * {@code flags_json}) and the same {@code board} chunk keys, and both must fold declared relation
- * <em>wishes</em> into <em>effective</em> symmetric edges by the identical rule: an asymmetric
- * ALLY/TRUCE wish stays a wish (effective only when mutual), while ENEMY is symmetric-max (one
- * side's enmity makes both enemies). Keeping that rule in one place guarantees the two paths can
- * never diverge.
- *
- * <p><b>Owning thread(s):</b> boot / import thread. <b>Mutability:</b> stateless static helpers;
- * no new dependency (a tiny tolerant scanner, not a full JSON parser — these are one-shot,
- * off-hot-path migration reads).
- *
- * <p>W25-REORG §P2b: this shared parse/relation-fold helper (the "LegacyJsonBlobs" role) stays in
- * the {@code storage} root, public, rather than being duplicated into {@code storage.load} and
- * {@code storage.legacy} — the whole point of the class is that the two loaders can never diverge
- * on the fold rule.
+ * <p><b>Owning thread(s):</b> boot thread. <b>Mutability:</b> stateless static helpers;
+ * no new dependency (a tiny tolerant scanner, not a full JSON parser — one-shot,
+ * off-hot-path boot reads).
  */
-public final class LegacyImportSupport {
+public final class RowJson {
 
     // "uuid" : "KIND"  or  "uuid" : KIND
     private static final Pattern REL_SCALAR = Pattern.compile(
@@ -43,7 +33,7 @@ public final class LegacyImportSupport {
     private static final Pattern FLAG_BOOL = Pattern.compile(
             "\"([A-Za-z_]+)\"\\s*:\\s*(true|false)");
 
-    private LegacyImportSupport() {
+    private RowJson() {
     }
 
     /** Maps a reference relation name (any case) to a {@link RelationKind} byte; NEUTRAL default. */

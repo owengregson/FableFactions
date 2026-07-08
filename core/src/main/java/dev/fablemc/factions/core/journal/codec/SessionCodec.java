@@ -44,7 +44,7 @@ public final class SessionCodec {
                 Wire.writeUuid(o, x.player());
                 Wire.writeLongArray(o, x.ids());
             }
-            default -> throw new IllegalStateException("not a session tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.SESSION);
         }
     }
 
@@ -60,7 +60,7 @@ public final class SessionCodec {
                             Wire.readStringArray(in));
             case INBOX_DELIVERED ->
                     new SessionEffect.InboxDelivered(seq, origin, Wire.readUuid(in), Wire.readLongArray(in));
-            default -> throw new IllegalStateException("not a session tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.SESSION);
         };
     }
 }

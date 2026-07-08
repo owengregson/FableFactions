@@ -1,7 +1,7 @@
 # Critique C — Correctness & Maintainability (concurrency specialist)
 
 Target: `docs/design/proposal-C.md` ("The Deterministic Kernel").
-Cross-checked against `docs/research/pvp-bugs-concurrency.md` and `docs/research/pvp-bugs-logic.md`.
+Cross-checked against `docs/research/ref-bugs-concurrency.md` and `docs/research/ref-bugs-logic.md`.
 
 **Verdict: sound-with-fixes.** The single-writer / immutable-snapshot / effect-projection
 skeleton genuinely makes the *in-kernel* RMW races (concurrency BUG-1/2/4/8/16/17/18/21,

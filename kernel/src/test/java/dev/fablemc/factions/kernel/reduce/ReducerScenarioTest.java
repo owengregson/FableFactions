@@ -11,33 +11,31 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-import dev.fablemc.factions.kernel.config.ConfigImage;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.MembershipEffect;
+import dev.fablemc.factions.kernel.effect.PowerEffect;
+import dev.fablemc.factions.kernel.effect.RoleEffect;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
-import dev.fablemc.factions.kernel.intent.Intent;
+import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.intent.MembershipIntent;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.RelationIntent;
+import dev.fablemc.factions.kernel.intent.RoleIntent;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Kern.Session;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.RelationKind;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.PowerSource;
 import dev.fablemc.factions.kernel.vocab.ClaimMode;
-import dev.fablemc.factions.kernel.intent.RoleIntent;
-import dev.fablemc.factions.kernel.intent.RelationIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.MembershipIntent;
-import dev.fablemc.factions.kernel.intent.LifecycleIntent;
-import dev.fablemc.factions.kernel.intent.ClaimIntent;
-import dev.fablemc.factions.kernel.effect.RoleEffect;
-import dev.fablemc.factions.kernel.effect.PowerEffect;
-import dev.fablemc.factions.kernel.effect.MembershipEffect;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.vocab.PowerSource;
+import dev.fablemc.factions.kernel.vocab.Relation;
 
 /** Targeted behavioural pins for the reducer's membership / role / relation / claim / power paths. */
 class ReducerScenarioTest {

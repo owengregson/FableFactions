@@ -1,7 +1,7 @@
 # Critique A — Correctness & Maintainability (concurrency specialist, hostile review)
 
 Target: `docs/design/proposal-A.md` ("The Data-Oriented Core").
-Cross-checked against `docs/research/pvp-bugs-concurrency.md` and `docs/research/pvp-bugs-logic.md`.
+Cross-checked against `docs/research/ref-bugs-concurrency.md` and `docs/research/ref-bugs-logic.md`.
 
 Verdict: **sound-with-fixes.** The single-writer + COW-snapshot spine is the right idea and
 genuinely kills most of the catalogued RMW/TOCTOU classes. But the proposal repeatedly asserts

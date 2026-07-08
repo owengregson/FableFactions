@@ -1,7 +1,7 @@
 # Critique C — Performance / JVM / server-internals review of Proposal C ("The Deterministic Kernel")
 
 Reviewer stance: hostile, performance-only. I read the proposal in full and cross-checked the hot
-paths against `version-deltas.md` and `pvp-engines.md`. The read-plane idea is genuinely good and
+paths against `version-deltas.md` and `ref-engines.md`. The read-plane idea is genuinely good and
 cures the reference plugin's actual disease (per-event JDBC in `EngineProtection`/`EngineChunkChange`,
 research §3.1/§3.2). But the **write plane's headline numbers do not survive contact with the stated
 load (1000 players / 1M–5M claims / up-to-1M member rows)**, and at least one structural gap is likely

@@ -1,6 +1,6 @@
 # FableFactions Research: Services, Config, Registry, Bootstrap, API, Util, Metrics
 
-Reverse-engineered from `com.pvpindex.factions` (package `pvpindex-factions`). This document specifies **behavior** completely enough to reimplement without the source. Scope: `service/`, `config/`, `registry/`, `bootstrap/`, `scheduler/`, `util/`, `metrics/`, root-package files, and `api/` (TeamsAPI adapters). Cross-referenced engines (`EnginePower`, `EngineEconomy`, `EngineChunkChange`, `EngineProtection`) are documented where they carry the load-bearing power/claim/economy/fly math.
+Reverse-engineered from `com.reference.factions` (package `the reference implementation`). This document specifies **behavior** completely enough to reimplement without the source. Scope: `service/`, `config/`, `registry/`, `bootstrap/`, `scheduler/`, `util/`, `metrics/`, root-package files, and `api/` (TeamsAPI adapters). Cross-referenced engines (`EnginePower`, `EngineEconomy`, `EngineChunkChange`, `EngineProtection`) are documented where they carry the load-bearing power/claim/economy/fly math.
 
 Persistence is via **Jaloquent** (`com.github.ezframework.jaloquent`), an ORM whose `StorageException` is thrown by all repository calls. `repos.factions().transaction(Runnable)` runs a DB transaction. The service layer is deliberately **TeamsAPI-free**: commands/engines depend only on the internal interfaces; the `api/` package wraps the impls when TeamsAPI is present.
 
@@ -38,7 +38,7 @@ Each has `id` (JSON/config key), `displayName`, `description`, `defaultValue`.
 `id` is lower-kebab. Values (id): `CLAIM(claim)`, `UNCLAIM(unclaim)`, `RELATION_CHANGE(relation-change)`, `MEMBER_KICK(kick)`, `MEMBER_PROMOTE(promote)`, `MEMBER_DEMOTE(demote)`, `ROLE_CREATE(role-create)`, `ROLE_RENAME(role-rename)`, `ROLE_PRIORITY_SET(role-priority-set)`, `ROLE_PREFIX_SET(role-prefix-set)`, `ROLE_DELETE(role-delete)`, `ROLE_ASSIGN(role-assign)`, `BANK_DEPOSIT(bank-deposit)`, `BANK_WITHDRAW(bank-withdraw)`, `BANK_TRANSFER(bank-transfer)`, `MERGE_REQUEST(merge-request)`, `MERGE_ACCEPT(merge-accept)`, `MOTD_SET(motd-set)`.
 `fromId(id)` → case-insensitive `Optional`. `validIds()` → comma-joined list of all ids (for error messages).
 
-### 1.4 `PvPIndexFactions extends JavaPlugin`
+### 1.4 `ReferenceFactions extends JavaPlugin`
 Pure lifecycle delegation. `onEnable()`: `bootstrap = new Bootstrap(this); if (!bootstrap.start()) disablePlugin(this);`. `onDisable()`: `if (bootstrap != null) bootstrap.stop();`. Exposes `getBootstrap()`.
 
 ### Referenced model constants (from `data.model`, needed by services)
@@ -224,9 +224,9 @@ Two `FileConfiguration`s: `cfg` (config.yml) and `rolesCfg` (roles.yml). Single-
 | `factions.merge.enabled` | false | `isMergeEnabled()` |
 | `factions.updates.enabled` | true | `isUpdateCheckEnabled()` |
 | `factions.updates.notify-ops-on-join` | true | `isUpdateNotifyOpsOnJoin()` |
-| `factions.updates.modrinth-slug` | `"pvpindex-factions"` | `getUpdateModrinthSlug()` |
-| `factions.updates.github-owner` | `"PVP-Index"` | `getUpdateGithubOwner()` |
-| `factions.updates.github-repo` | `"pvpindex-factions"` | `getUpdateGithubRepo()` |
+| `factions.updates.modrinth-slug` | `"the reference implementation"` | `getUpdateModrinthSlug()` |
+| `factions.updates.github-owner` | `"the reference project"` | `getUpdateGithubOwner()` |
+| `factions.updates.github-repo` | `"the reference implementation"` | `getUpdateGithubRepo()` |
 | `factions.flags.<id>.default` | flag's enum default | `getFlagDefault(FactionFlag)` |
 | `factions.flags.<id>.player-editable` | true | `isFlagPlayerEditable(FactionFlag)` |
 
@@ -328,7 +328,7 @@ Constructs internal service impls with repos+config+logger:
 
 Registers each into `ServiceRegistry`.
 
-**TeamsAPI optional wiring**: `isTeamsApiAvailable(ctx)` = `Class.forName("com.skyblockexp.teamsapi.api.TeamsAPI")` succeeds AND plugin `"TeamsAPI"` present. If absent → log "running standalone", `teamsApiEnabled=false`, return true. If present → `Class.forName("com.pvpindex.factions.api.TeamsApiRegistrarImpl")`, instantiate, call `register(plugin, factionImpl, inviteImpl, warpImpl, teamChestImpl)`. On success store registrar + `teamsApiEnabled=true`; on `false` or `ReflectiveOperationException|LinkageError` → warn + disabled. Reflection isolation ensures the class loads without TeamsAPI on classpath. `stop`: `registrar.unregister()`.
+**TeamsAPI optional wiring**: `isTeamsApiAvailable(ctx)` = `Class.forName("com.skyblockexp.teamsapi.api.TeamsAPI")` succeeds AND plugin `"TeamsAPI"` present. If absent → log "running standalone", `teamsApiEnabled=false`, return true. If present → `Class.forName("com.reference.factions.api.TeamsApiRegistrarImpl")`, instantiate, call `register(plugin, factionImpl, inviteImpl, warpImpl, teamChestImpl)`. On success store registrar + `teamsApiEnabled=true`; on `false` or `ReflectiveOperationException|LinkageError` → warn + disabled. Reflection isolation ensures the class loads without TeamsAPI on classpath. `stop`: `registrar.unregister()`.
 
 ### 4.6 EnginesBootstrapComponent.start
 Creates and registers (Listeners + timers):
@@ -363,7 +363,7 @@ Player command roots registered on aliases `{"f","faction","factions"}` via `Fac
 
 A second `CommandRegistry` for admin: `CmdInfo`, `CmdAdminBypass`, `CmdAdminClaim`, `CmdAdminUnclaim`, `CmdAdminDisband`, `CmdAdminReload`, `CmdAdminSafezone`, `CmdAdminWarzone`, `CmdAdminShield`, `CmdAdminFlag`, `CmdAdminAudit`, `CmdAdminPower`, `CmdAdminHelp`. Registered on aliases `{"fa","factionadmin"}` via `AdminCommandExecutor` + `AdminTabCompleter`.
 
-`loadTeamsCommandBridge`: returns null if `!teamsApiEnabled`, else `Class.forName("com.pvpindex.factions.command.TeamsCommandBridgeImpl")` instantiated (warn+null on failure).
+`loadTeamsCommandBridge`: returns null if `!teamsApiEnabled`, else `Class.forName("com.reference.factions.command.TeamsCommandBridgeImpl")` instantiated (warn+null on failure).
 
 ### 4.8 OptionalHooksBootstrapComponent.start
 Never fatal. Order: `initBstats`, `initPlaceholderApi`, `initDynmap`, `initEzCountdown`, `initDiscordSrv`.
@@ -595,7 +595,7 @@ Chests stored as `TeamChestModel(factionId, name, contents Base64, createdAt)`. 
 - `setMessagesConfig`/`getMessagesConfig` (volatile).
 - **`send(sender, mm)`**: `AdventureOps.send` if ADVENTURE else `LegacyOps.send`.
   - `AdventureOps`: cached MethodHandles resolve the server's native MiniMessage (`deserialize(String, TagResolver[])` vararg — the single-arg form was removed in Adventure 4.20.0) and `sendMessage(Component)`. On any failure falls back to `sender.sendMessage(stripTags(mm))`. Uses string literals so the shade relocator does NOT rewrite them.
-  - `LegacyOps`: uses the **shaded** (relocated `com.pvpindex.lib.adventure.*`) MiniMessage + `LegacyComponentSerializer.legacySection()` + a `GsonComponentSerializer` initialized under the plugin classloader. For players, serializes to JSON→BungeeCord `BaseComponent[]` and sends via `player.spigot().sendMessage(...)` (preserves hover/click on Spigot); for non-players uses legacy §-codes.
+  - `LegacyOps`: uses the **shaded** (relocated `com.reference.lib.adventure.*`) MiniMessage + `LegacyComponentSerializer.legacySection()` + a `GsonComponentSerializer` initialized under the plugin classloader. For players, serializes to JSON→BungeeCord `BaseComponent[]` and sends via `player.spigot().sendMessage(...)` (preserves hover/click on Spigot); for non-players uses legacy §-codes.
 - `sendKey(sender, key, fallback, kv…)`: `message(sender,key,fallback)` then `replace` then `send`.
 - `message(key, fallback)` / `message(sender, key, fallback)`: pull from `MessagesConfig` (default-locale vs sender-locale) or return fallback if config null.
 - `replace(template, kv…)`: `{key}`→value token substitution over alternating pairs.
@@ -652,7 +652,7 @@ Impl `register`: instantiate + register core providers `TeamsAPI.registerProvide
 
 ### 10.4 Role mapping
 - **`TeamRoleMapper`**: `roleToPriority`: OWNER→`PRIORITY_OWNER`, ADMIN→`PRIORITY_OFFICER`, MEMBER→`PRIORITY_MEMBER`. `rankToRole`: null→MEMBER; priority≥OWNER→OWNER; ≥OFFICER→ADMIN; else MEMBER. `resolveRankForRole(ranks, role)`: OWNER→max priority; ADMIN→highest rank in `[OFFICER, OWNER)`, falling back to highest below owner; MEMBER→min priority.
-- **`TeamsCustomRoleRegistry`**: `roleKey(factionId, rankId, rankName)` = `"pvpindex:<factionId>:<rankId>:<safeName>"` (name lowercased, non-`[a-z0-9_-]`→`-`). `toRoleDefinition(rank)` = `TeamRoleDefinition(key, priority, prefix)` (prefix = rank prefix or built-in role's prefix or ""). `registerAll`/`unregisterAllForPluginData` iterate all factions×ranks.
+- **`TeamsCustomRoleRegistry`**: `roleKey(factionId, rankId, rankName)` = `"reference:<factionId>:<rankId>:<safeName>"` (name lowercased, non-`[a-z0-9_-]`→`-`). `toRoleDefinition(rank)` = `TeamRoleDefinition(key, priority, prefix)` (prefix = rank prefix or built-in role's prefix or ""). `registerAll`/`unregisterAllForPluginData` iterate all factions×ranks.
 - **`RoleChangeNotifier`** (interface, default no-ops `roleCreated/roleUpdated/roleRenamed/roleDeleted`) + **`RoleChangeNotifierHolder`** (volatile no-op default; `getNotifier/setNotifier/clearNotifier`). Core service always calls the holder; only the TeamsAPI registrar installs a real notifier. This is the ONE part of the api-package coupling that is always on the classpath (imported by `FactionServiceImpl`).
 
 ---

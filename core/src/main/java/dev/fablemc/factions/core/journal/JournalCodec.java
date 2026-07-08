@@ -61,29 +61,19 @@ public final class JournalCodec {
      * delta, so they have no tag and are excluded from {@link #verifyComplete()}.
      */
     static final Set<Class<? extends Effect>> CONTROL_EFFECTS =
-            Collections.unmodifiableSet(new HashSet<>(java.util.List.of(
-                    SystemEffect.ContinuationRequested.class)));
+            Set.of(SystemEffect.ContinuationRequested.class);
 
     private JournalCodec() {
     }
 
     /** The stable {@code u16} tag for an effect's record class. */
     public static int tagOf(Effect e) {
-        EffectTag tag = EffectTag.of(e);
-        if (tag == null) {
-            throw new IllegalStateException("no journal tag registered for effect "
-                    + e.getClass().getName());
-        }
-        return tag.code();
+        return EffectTag.require(e).code();
     }
 
     /** Encodes an effect's payload (origin + fields, excluding seq). */
     public static byte[] encode(Effect e) {
-        EffectTag tag = EffectTag.of(e);
-        if (tag == null) {
-            throw new IllegalStateException("no journal tag registered for effect "
-                    + e.getClass().getName());
-        }
+        EffectTag tag = EffectTag.require(e);
         ByteArrayOutputStream bos = new ByteArrayOutputStream(64);
         DataOutputStream out = new DataOutputStream(bos);
         try {

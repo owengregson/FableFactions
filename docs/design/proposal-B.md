@@ -705,7 +705,7 @@ any other way fails an ArchUnit rule (`HandlerList` references only inside the l
   entry — a mid-operation reload can never tear one operation.
 - **One canonical key per tunable** (kills logic BUG-1's dual keys and BUG-22's divergent
   max-power): the parser reads the reference's full key tree (every key in
-  `pvp-resources.md` §1 preserved, including `power.sources.*` amounts defaulting to their
+  `ref-resources.md` §1 preserved, including `power.sources.*` amounts defaulting to their
   legacy aliases exactly as documented) but folds aliases into one canonical field with a
   deprecation warning when both are set and disagree.
 - **Human file + machine overlay**: GUI/API writes go to `state/overrides.yml`
@@ -722,7 +722,7 @@ any other way fails an ArchUnit rule (`HandlerList` references only inside the l
 ## 9. Messages / i18n / text pipeline
 
 - **MessageCatalog**: `messages/messages_<locale>.yml` for shipped locales `en, es, de, fr,
-  pt-BR, zh, ru, ja` (reference key inventory preserved — every key in `pvp-resources.md` §9
+  pt-BR, zh, ru, ja` (reference key inventory preserved — every key in `ref-resources.md` §9
   exists with the same default text). Waterfall: player locale → default → en → inline
   fallback. Locale normalization identical to reference (`pt-br → pt-BR` special case).
 - **Render-once pipeline**: MiniMessage template (shaded, relocated Adventure) → parsed
@@ -764,7 +764,7 @@ any other way fails an ArchUnit rule (`HandlerList` references only inside the l
 | Integration | Strategy | Adapter | Behavior parity notes |
 |---|---|---|---|
 | **Vault** | typed, guard-class (`Class.forName("net.milkbowl.vault.economy.Economy")` before touching) | `VaultEconomy` behind `EconomyBridge` iface + Noop | OfflinePlayer overloads only; all charge flows via reserve→settle (§4.3) |
-| **PlaceholderAPI** | typed, presence-gated | `FablePlaceholders` (`%fable_…%` + legacy `%pvpindex_…%` alias set) | serves from read plane — zero DB, zero blocking; same param list & fallbacks as reference |
+| **PlaceholderAPI** | typed, presence-gated | `FablePlaceholders` (`%fable_…%` only — no compat aliases) | serves from read plane — zero DB, zero blocking; same param list & fallbacks as reference |
 | **WorldGuard** | typed façade `TerritoryGuard` + Noop + factory | `WorldGuardTerritoryGuard`, `WorldGuardRegionSync` (claim events → region mirror, `syncAll` on enable) | WG-sync build fast path + HIGHEST ally-unlock preserved |
 | **dynmap** | typed, presence-gated | `DynmapLayer` — marker set `fable_factions`, 8-color palette by `abs(id.hashCode())%8`, 16×16 area markers, id `factionId~world~x~z`, MONITOR handlers on claim/unclaim/disband, `loadAllClaims` +1 tick | driven from API events + read plane; batch redraw on `runAsync` |
 | **DiscordSRV** | **reflection-only** (JDA 4 lookups) | `DiscordSrvNotifier` + `DiscordSrvFactionListener` | same event→template config keys |
@@ -819,7 +819,7 @@ verifyTextBoundary, apiCompat, reportCompatFootprint` + all unit/arch tests.
 
 ## 12. Feature → module mapping (requirement-1 proof)
 
-Every behavior documented in the `pvp-*.md` specs has a home. (K = `:kernel` pure logic,
+Every behavior documented in the `ref-*.md` specs has a home. (K = `:kernel` pure logic,
 R = Realm command/state in `:core.realm`, L = listener in `:core.listen`, S = StorageActor,
 P = port/platform, I = `:core.integration`, G = `:core.gui`.)
 
@@ -854,7 +854,7 @@ P = port/platform, I = `:core.integration`, G = `:core.gui`.)
 | All integrations (`integrations` §1–8) + bStats + update checker | §10.2 table |
 | All config keys (`resources` §1–5) & message keys (§9) & permissions (§6.2) | ConfigSnapshot sections / MessageCatalog / plugin.yml permission tree (verbatim node set) |
 | Scheduler semantics (`engines` §1) | SchedulePort (§3.3) — same contract, retired-callback fixed |
-| Data-layer semantics (`pvp-data`) | §6 (projection model; import path for reference DBs) |
+| Data-layer semantics (`ref-data`) | §6 (projection model; import path for reference DBs) |
 
 *(Redesigned HOW, never dropped WHAT: rows above marked "fixes L-x/C-x" change behavior only
 where the bug catalogs mandate it; each has a config escape hatch when the old behavior was
@@ -907,7 +907,7 @@ plausibly load-bearing for server balance.)*
 
 ## 14. How each catalogued bug class is made impossible
 
-**Concurrency catalog (`pvp-bugs-concurrency.md`):**
+**Concurrency catalog (`ref-bugs-concurrency.md`):**
 
 | Bug(s) | Structural kill |
 |---|---|
@@ -925,7 +925,7 @@ plausibly load-bearing for server balance.)*
 | C-22 transfer event after commit | All bank events fire pre-commit on the Realm thread and honor cancellation uniformly. |
 | C-23 dead `last_activity` | Written on join, quit, and a 5-minute heartbeat batch; a kernel test asserts the inactivity exclusion actually excludes. |
 
-**Logic catalog (`pvp-bugs-logic.md`):**
+**Logic catalog (`ref-bugs-logic.md`):**
 
 | Bug(s) | Structural kill |
 |---|---|

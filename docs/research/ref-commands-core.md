@@ -1,4 +1,4 @@
-# PvPIndex Factions — Command Framework & Core Subcommands (SPEC)
+# the reference implementation — Command Framework & Core Subcommands (SPEC)
 
 Clean-room behavioral spec for the `/f` command framework and every top-level subcommand.
 Source scope: `command/*.java` (framework) + `command/sub/Cmd*.java` (top-level leaf/group commands only).
@@ -16,7 +16,7 @@ Two Bukkit commands are declared:
 | `f` | `faction`, `factions` | none (open) | `/f <subcommand> [args]` |
 | `fa` | `factionadmin` | `factions.admin` | `/fa <subcommand> [args]` |
 
-- `api-version: '1.21'`, `folia-supported: true`, `main: com.pvpindex.factions.PvPIndexFactions`.
+- `api-version: '1.21'`, `folia-supported: true`, `main: com.reference.factions.ReferenceFactions`.
 - `softdepend`: TeamsAPI, Vault, WorldGuard, WorldEdit, PlaceholderAPI, Essentials, EssentialsX, dynmap, DiscordSRV, EzEconomy, EzCountdown, LWC, LWCX.
 - `loadbefore`: EzShops, EzAuction, EzRTP, EzClean.
 - ALL individual subcommand permission nodes are declared here (see §9). Only the two root commands are Bukkit commands; every subcommand is dispatched programmatically.

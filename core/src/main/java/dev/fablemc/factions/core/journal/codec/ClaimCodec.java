@@ -49,7 +49,7 @@ public final class ClaimCodec {
                 o.writeInt(x.worldIdx());
                 o.writeLong(x.key());
             }
-            default -> throw new IllegalStateException("not a claim tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.CLAIM);
         }
     }
 
@@ -66,7 +66,7 @@ public final class ClaimCodec {
                             in.readInt());
             case ZONE_REMOVED ->
                     new ClaimEffect.ZoneRemoved(seq, origin, in.readInt(), in.readInt(), in.readLong());
-            default -> throw new IllegalStateException("not a claim tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.CLAIM);
         };
     }
 }

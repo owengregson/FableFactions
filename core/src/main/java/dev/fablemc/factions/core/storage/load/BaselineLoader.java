@@ -33,7 +33,7 @@ import dev.fablemc.factions.kernel.state.WarpTable;
  * faction's handle is {@code FactionHandle.handle(0, ordinal)} — the value stored in claim owner
  * slots and returned to the caller so it can seed the storage projector's handle→id map. Relation
  * wishes are folded into effective symmetric edges by
- * {@code dev.fablemc.factions.core.storage.LegacyImportSupport} (asymmetric ALLY stays a wish).
+ * {@code dev.fablemc.factions.core.storage.RowJson} (asymmetric ALLY stays a wish).
  * Progress is logged every 10% of total rows.
  *
  * <p><b>Owning thread(s):</b> the boot thread only. <b>Mutability:</b> confined; the returned

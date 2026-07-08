@@ -66,7 +66,7 @@ public final class RoleCodec {
                 Wire.writeUuid(o, x.player());
                 Wire.writeString(o, x.roleId());
             }
-            default -> throw new IllegalStateException("not a role tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.ROLE);
         }
     }
 
@@ -92,7 +92,7 @@ public final class RoleCodec {
             case ROLE_ASSIGNED ->
                     new RoleEffect.RoleAssigned(seq, origin, in.readInt(), Wire.readUuid(in),
                             Wire.readString(in));
-            default -> throw new IllegalStateException("not a role tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.ROLE);
         };
     }
 }

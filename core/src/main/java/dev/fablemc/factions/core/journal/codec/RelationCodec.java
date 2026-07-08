@@ -38,7 +38,7 @@ public final class RelationCodec {
                 o.writeInt(x.kind().code());
                 o.writeInt(x.prevKind().code());
             }
-            default -> throw new IllegalStateException("not a relation tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.RELATION);
         }
     }
 
@@ -52,7 +52,7 @@ public final class RelationCodec {
                     new RelationEffect.RelationEffective(seq, origin, in.readInt(), in.readInt(),
                             Relation.fromCode((byte) in.readInt()),
                             Relation.fromCode((byte) in.readInt()));
-            default -> throw new IllegalStateException("not a relation tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.RELATION);
         };
     }
 }

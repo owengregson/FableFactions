@@ -1,22 +1,22 @@
-# PvPIndex Factions — Data Layer Specification
+# the reference implementation — Data Layer Specification
 
 Clean-room reimplementation spec for the persistence layer: entities/tables, repository
 query semantics, ORM usage, connection management, H2/MySQL differences, schema
 migration, chunk-claim encoding, caching, async/threading, and shutdown behavior.
 
-Source package scope: `com.pvpindex.factions.data` (`.model`, `.repository`),
-`com.pvpindex.factions.data.DatabaseManager`, `.data.Repositories`,
-`com.pvpindex.factions.update.UpdateNotificationManager`, `resources/database.yml`,
+Source package scope: `com.reference.factions.data` (`.model`, `.repository`),
+`com.reference.factions.data.DatabaseManager`, `.data.Repositories`,
+`com.reference.factions.update.UpdateNotificationManager`, `resources/database.yml`,
 plus the Jaloquent ORM (`com.github.EzFramework:Jaloquent:1.3.0` +
-`JavaQueryBuilder:1.2.0`, shaded/relocated to `com.pvpindex.lib.jaloquent` /
-`com.pvpindex.lib.javaquerybuilder`).
+`JavaQueryBuilder:1.2.0`, shaded/relocated to `com.reference.lib.jaloquent` /
+`com.reference.lib.javaquerybuilder`).
 
 ---
 
 ## 1. ORM overview (Jaloquent + JavaQueryBuilder)
 
 The plugin uses **Jaloquent**, a small active-record ORM, over a JDBC `DataSource`.
-Key types (all relocated at build time under `com.pvpindex.lib.*`):
+Key types (all relocated at build time under `com.reference.lib.*`):
 
 | Jaloquent type | Role |
 |---|---|
@@ -67,14 +67,14 @@ is treated as **H2** (H2 is the default/fallback).
 ### HikariCP configuration (both backends)
 | Setting | Value |
 |---|---|
-| `poolName` | `PvPIndexFactions-DB` |
+| `poolName` | `ReferenceFactions-DB` |
 | `connectionTimeout` | `10_000` ms |
 | `idleTimeout` | `600_000` ms (10 min) |
 | `maxLifetime` | `1_800_000` ms (30 min) |
 
 ### H2 (default, embedded, file-based)
 - File path: `new File(dataDir, dbCfg.getH2File())` where `getH2File()` default is
-  `data/factions` (relative to `plugins/PvPIndexFactions/`). Parent dirs are `mkdirs()`-ed.
+  `data/factions` (relative to `plugins/ReferenceFactions/`). Parent dirs are `mkdirs()`-ed.
 - JDBC URL: `jdbc:h2:file:<absolutePath>;MODE=MySQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=VALUE`
   - `MODE=MySQL` → MySQL-compat mode (needed for backtick identifiers, `TINYINT`, etc.).
   - `DB_CLOSE_DELAY=-1` → keep DB open until JVM exit even if all connections close.
@@ -436,8 +436,8 @@ Both drivers are shaded/relocated in the packaged jar; Hikari `driverClassName` 
 explicitly (never via `DriverManager` SPI — the `META-INF/services/java.sql.Driver` file is
 excluded by the shade config). Detection tries the shaded class first, falls back to the
 canonical one (for tests):
-- `detectH2DriverClass()`: `com.pvpindex.lib.h2.Driver` else `org.h2.Driver`.
-- `detectMysqlDriverClass()`: `com.pvpindex.lib.mysql.cj.jdbc.Driver` else `com.mysql.cj.jdbc.Driver`.
+- `detectH2DriverClass()`: `com.reference.lib.h2.Driver` else `org.h2.Driver`.
+- `detectMysqlDriverClass()`: `com.reference.lib.mysql.cj.jdbc.Driver` else `com.mysql.cj.jdbc.Driver`.
 
 ---
 
@@ -596,7 +596,7 @@ immediately executes SQL. There is no write-behind buffer, no dirty-tracking flu
 ## 12. Update-notification manager (`update` package)
 
 `UpdateNotificationManager` (in scope but orthogonal to persistence): wraps a
-`ChainedUpdateChecker` (from shaded `com.pvpindex.lib.updater`).
+`ChainedUpdateChecker` (from shaded `com.reference.lib.updater`).
 - `checkAsync()` → `checker.checkNowAsync()` (returns `CompletableFuture<ChainedUpdateResult>`);
   `.thenAccept(handleResult).exceptionally(...)` logs WARNING on unexpected failure.
 - `handleResult`: stores `latest` (volatile). If `update.hasError()` → WARNING listing failed

@@ -12,7 +12,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
 
-import dev.fablemc.factions.core.storage.LegacyImportSupport;
+import dev.fablemc.factions.core.storage.RowJson;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.FactionArena;
@@ -27,7 +27,7 @@ import dev.fablemc.factions.kernel.state.RelationKind;
  * Reads the {@code factions} table and folds each row (plus its ranks/claims and relation wishes)
  * into an immutable {@link Faction} inside a fresh {@link FactionArena} (proposal-C §6.3). Faction
  * ordinals are assigned densely from {@link FactionHandle#FIRST_NORMAL_ORDINAL}; generation stays
- * 0. Relation wishes fold into effective symmetric edges via {@link LegacyImportSupport}.
+ * 0. Relation wishes fold into effective symmetric edges via {@link RowJson}.
  *
  * <p><b>Owning thread(s):</b> the boot thread only. <b>Mutability:</b> stateless static reader; the
  * built {@link FactionArena}/{@link NameIndex} are immutable.
@@ -94,7 +94,7 @@ final class FactionRows {
         Map<Integer, Map<Integer, Byte>> declared = new HashMap<>();
         for (FactionRow row : rows) {
             Map<Integer, Byte> edges = new TreeMap<>();
-            for (Map.Entry<String, Byte> e : LegacyImportSupport.parseRelations(row.relationsJson)
+            for (Map.Entry<String, Byte> e : RowJson.parseRelations(row.relationsJson)
                     .entrySet()) {
                 Integer other = ordinalByFactionId.get(e.getKey());
                 if (other != null && other != row.ordinal) {
@@ -121,7 +121,7 @@ final class FactionRows {
                 int other = e.getKey();
                 byte back = declared.getOrDefault(other, Map.of())
                         .getOrDefault(row.ordinal, RelationKind.NEUTRAL);
-                byte eff = LegacyImportSupport.effectiveKind(e.getValue(), back);
+                byte eff = RowJson.effectiveKind(e.getValue(), back);
                 if (eff != RelationKind.NEUTRAL) {
                     effective.put(other, eff);
                 }
@@ -162,7 +162,7 @@ final class FactionRows {
                     ? LoadSupport.defaultRanks() : rankList.toArray(new Rank[0]);
             FactionClaimList claims = claimsByOrdinal.getOrDefault(row.ordinal,
                     FactionClaimList.empty());
-            long flagBits = LegacyImportSupport.parseFlags(row.flagsJson, 0L);
+            long flagBits = RowJson.parseFlags(row.flagsJson, 0L);
 
             Faction faction = new Faction(
                     row.ordinal, row.id, row.name, NameIndex.fold(row.name), row.ownerId,

@@ -1,6 +1,6 @@
 # FableFactions Spec — Bank, Chest, Invite, Merge, Warp, Predefined, GUI
 
-Clean-room behavioral spec derived from `pvpindex-factions`. Scope: command packages
+Clean-room behavioral spec derived from `the reference implementation`. Scope: command packages
 `command/sub/{bank,chest,invite,merge,warp,predefined}`, the `predefined` package, and the `gui`
 package, plus every service/engine/model they touch. An implementer who has never seen the original
 must be able to reproduce behavior exactly from this document.

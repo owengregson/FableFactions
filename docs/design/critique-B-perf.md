@@ -72,7 +72,7 @@ the jcstress suite is testing a structure that is incorrect by construction.
 Three compounding errors.
 
 **(a) The population is wrong.** Power regen is applied to online *and* offline players
-(`REGEN_ONLINE` / `REGEN_OFFLINE` — pvp-engines §3.7.1/§3.11.2; the reference does
+(`REGEN_ONLINE` / `REGEN_OFFLINE` — ref-engines §3.7.1/§3.11.2; the reference does
 `players().findAll()`). The tick therefore iterates the **entire registered-player table**,
 not the concurrent 5 000. A mature factions server has hundreds of thousands to millions of
 registered `PlayerRecord`s resident (you loaded them all at boot for offline regen,

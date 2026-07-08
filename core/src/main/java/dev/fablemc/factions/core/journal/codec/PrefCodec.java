@@ -61,7 +61,7 @@ public final class PrefCodec {
                 o.writeInt(x.startHour());
                 o.writeInt(x.durationHours());
             }
-            default -> throw new IllegalStateException("not a pref tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.PREF);
         }
     }
 
@@ -83,7 +83,7 @@ public final class PrefCodec {
                     new PrefEffect.OverrideChanged(seq, origin, Wire.readUuid(in), in.readBoolean());
             case SHIELD_CHANGED ->
                     new PrefEffect.ShieldChanged(seq, origin, in.readInt(), in.readInt(), in.readInt());
-            default -> throw new IllegalStateException("not a pref tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.PREF);
         };
     }
 }

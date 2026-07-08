@@ -34,7 +34,7 @@ public final class SystemCodec {
                 Wire.writeString(o, x.detail());
             }
             case CONFIG_SWAPPED -> Wire.writeString(o, ((SystemEffect.ConfigSwapped) e).diffSummary());
-            default -> throw new IllegalStateException("not an audit/system tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.SYSTEM);
         }
     }
 
@@ -45,7 +45,7 @@ public final class SystemCodec {
                     new AuditEffect.AuditRecorded(seq, origin, in.readInt(), Wire.readUuid(in),
                             FactionAuditAction.fromId(Wire.readString(in)), Wire.readString(in));
             case CONFIG_SWAPPED -> new SystemEffect.ConfigSwapped(seq, origin, Wire.readString(in));
-            default -> throw new IllegalStateException("not an audit/system tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.SYSTEM);
         };
     }
 }

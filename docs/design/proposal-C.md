@@ -5,7 +5,7 @@ immutable, pure-JDK value. It is mutated by exactly one thread, through one orde
 of `Intent` records, producing an ordered stream of `Effect` records. Everything else —
 protection checks on 1000 players' events, chat tags, PlaceholderAPI, dynmap — is a lock-free
 read of a published immutable snapshot. Storage is a projection of the effect stream, never an
-authority. Every catalogued race in `pvp-bugs-concurrency.md` is a read-modify-write against
+authority. Every catalogued race in `ref-bugs-concurrency.md` is a read-modify-write against
 shared mutable state or a dirty cache; this architecture contains **zero** shared mutable
 domain state and **zero** caches-of-record, so those bug classes are not "avoided" — they are
 unexpressible.
@@ -582,7 +582,7 @@ are idempotent by `seq` guard).
 H2: `jdbc:h2:file:…;MODE=MySQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=VALUE`, pool=1, MERGE-INTO
 rewrite in `H2Dialect`. MySQL: Hikari pool from config (default 10), `ON DUPLICATE KEY
 UPDATE` in `MySqlDialect`. Drivers shaded + relocated, `META-INF/services/java.sql.Driver`
-excluded, explicit `driverClassName` (classloader isolation, per pvp-data §6).
+excluded, explicit `driverClassName` (classloader isolation, per ref-data §6).
 
 ### 6.3 Load path
 
@@ -591,9 +591,9 @@ excluded, explicit `driverClassName` (classloader isolation, per pvp-data §6).
 (`ClaimAtlas.Builder` fills shards in place — building is the one place mutation exists,
 single-threaded, pre-publish) → replay journal tail → freeze → publish snapshot v0 →
 **only then** register listeners and commands. 5M claims stream at ~500k rows/s ≈ 10s boot;
-progress logged every 10%. Legacy import: `PvpIndexImporter` maps the reference's
+progress logged every 10%. Legacy import: `the (removed) legacy importer` maps the reference's
 `world:cx:cz` board ids, relation/flags JSON blobs, and TINYINT prefs into the new schema —
-one-shot, gated by `/fa admin import pvpindex` (console), documented.
+one-shot, gated by `/fa admin import reference` (console), documented.
 
 ### 6.4 Shutdown
 
@@ -748,7 +748,7 @@ failure, not a field bug.
   `roles.yml`, `pre-defined.yml`, `messages/messages_<locale>.yml`
   (en, es, de, fr, pt-BR, zh, ru, ja shipped).
 * `ConfigImage` — one immutable record-of-records parsed with **warn-and-fallback** readers;
-  every key from the reference key tree is present (pvp-services §2 inventory is the
+  every key from the reference key tree is present (ref-services §2 inventory is the
   checklist), including the four reference-dead keys (`land.buffer-zone`,
   `economy.cost-create`, `economy.cost-claim`, `fly.disable-on-threat`) which are **wired**
   here (D-7) with defaults that preserve reference behavior (0/0/0/false-equivalent).
@@ -798,7 +798,7 @@ reducer re-validates; MONITOR-grade "happened" notifications are re-fired from t
 | Integration | Direction | Design |
 |---|---|---|
 | **Vault** | out | `VaultEconomy` lazy provider resolution per call (EzEconomy late-registration), OfflinePlayer overloads only; escrow saga participant (§4.6) |
-| **PlaceholderAPI** | in | `FactionsPlaceholders` (`%pvpindex_*%` parity aliases + `%fable_*%`) — pure snapshot reads, zero IO |
+| **PlaceholderAPI** | in | `FactionsPlaceholders` (`%fable_*%` (no compat aliases)) — pure snapshot reads, zero IO |
 | **dynmap** | out | `DynmapLayer` subscribes `ClaimSet/ClaimRemoved/FactionRenamed/RelationEffective`, debounced 2s, area markers per claim run; reference palette + marker-id formula preserved |
 | **DiscordSRV** | out | reflection-only notifier; subscribes `FactionCreated/Disbanded/RelationEffective`, per-event templates from config |
 | **WorldGuard** | both | `TerritoryGuard` façade (`canModifyTerritory`, `isFactionRegion` with the load-bearing `f_<world>_<x|nX>_<z|nZ>` name formula); `WorldGuardRegionSync` subscribes claim effects and mirrors cuboids (minHeight-aware); guard consulted in claim/sethome/warp-set pre-flight |
@@ -891,7 +891,7 @@ Legend: K=`:kernel` P=`:platform` C=`:core` M=`:compat-modern` F=`:compat-folia`
 | Zones: safezone/warzone semantics everywhere | K ordinals 0/1 + `Verdicts`/`PowerMath` | |
 | GUI menus (main/language), gui.yml schema, actions | C `gui` + P `MenuModel` | |
 | Locales: 8 shipped bundles, per-player override, normalization | C `MessageCatalog` | |
-| Integrations: Vault, WorldGuard (+region-sync), PAPI (`%pvpindex_*%`), EssentialsX, dynmap, LWC/LWCX, DiscordSRV, EzCountdown, TeamsAPI (all providers + custom roles + bridge), bStats (4 charts), update checker (Modrinth/GitHub) | C `integration.*` | §10.3 |
+| Integrations: Vault, WorldGuard (+region-sync), PAPI (`%fable_*%`), EssentialsX, dynmap, LWC/LWCX, DiscordSRV, EzCountdown, TeamsAPI (all providers + custom roles + bridge), bStats (4 charts), update checker (Modrinth/GitHub) | C `integration.*` | §10.3 |
 | Storage: H2 default / MySQL, Hikari settings, 12 tables + indexes, ensureColumn migrations, pagination semantics | C `storage` | §6 |
 | Custom Bukkit events (7) | `:api` | §10.2 |
 | Permission catalog (plugin.yml `factions.cmd.*` tree, defaults) | C resources | full parity list from resources §6.2 |
@@ -946,7 +946,7 @@ caps · D-15 board PK is (world,cx,cz) not a string.
 
 ## 14. How each catalogued bug class is made impossible
 
-**Concurrency catalog (pvp-bugs-concurrency.md):**
+**Concurrency catalog (ref-bugs-concurrency.md):**
 
 | Bug | Structural elimination |
 |---|---|
@@ -971,7 +971,7 @@ caps · D-15 board PK is (world,cx,cz) not a string.
 | 22 event after commit | cancellable events fire pre-flight, before any side effect, uniformly |
 | 23 dead last_activity | `SessionStarted/Ended` effects update it; a unit pin asserts F1 exclusion actually fires |
 
-**Logic catalog (pvp-bugs-logic.md):** #1 delta computed once in `PowerMath`, service layer
+**Logic catalog (ref-bugs-logic.md):** #1 delta computed once in `PowerMath`, service layer
 cannot override (there is no second layer); #2 clamp gated by source class (D-2); #3/#4 =
 concurrency 2/4; #5 `DamageAttribution` before every combat verdict; #6 event-complete
 matrix (D-4) with default-deny; #7 literal-text insertion + charset validation (D-5);

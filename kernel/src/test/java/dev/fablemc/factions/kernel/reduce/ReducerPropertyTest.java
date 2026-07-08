@@ -12,30 +12,29 @@ import net.jqwik.api.Example;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 
-import dev.fablemc.factions.kernel.config.ConfigImage;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
+import dev.fablemc.factions.kernel.intent.ChestIntent;
+import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.intent.Intent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.intent.MembershipIntent;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.RelationIntent;
+import dev.fablemc.factions.kernel.intent.RoleIntent;
+import dev.fablemc.factions.kernel.intent.SessionIntent;
+import dev.fablemc.factions.kernel.intent.TravelIntent;
 import dev.fablemc.factions.kernel.reduce.Kern.Session;
 import dev.fablemc.factions.kernel.rules.ClaimRules;
 import dev.fablemc.factions.kernel.rules.FactionAggregates;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.FactionArena;
 import dev.fablemc.factions.kernel.state.KernelState;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
 import dev.fablemc.factions.kernel.vocab.ClaimMode;
-import dev.fablemc.factions.kernel.intent.TravelIntent;
-import dev.fablemc.factions.kernel.intent.SessionIntent;
-import dev.fablemc.factions.kernel.intent.RoleIntent;
-import dev.fablemc.factions.kernel.intent.RelationIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.MembershipIntent;
-import dev.fablemc.factions.kernel.intent.LifecycleIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
-import dev.fablemc.factions.kernel.intent.ClaimIntent;
-import dev.fablemc.factions.kernel.intent.ChestIntent;
+import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
+import dev.fablemc.factions.kernel.vocab.Relation;
 
 /**
  * jqwik property suite over random intent sequences applied through {@link Reducer#apply} and

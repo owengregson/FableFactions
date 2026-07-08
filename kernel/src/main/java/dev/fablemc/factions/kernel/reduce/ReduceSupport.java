@@ -2,89 +2,34 @@ package dev.fablemc.factions.kernel.reduce;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.SplittableRandom;
 import java.util.UUID;
 
-import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.config.BakedTables;
 import dev.fablemc.factions.kernel.config.PowerConfig;
+import dev.fablemc.factions.kernel.effect.AuditEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
-import dev.fablemc.factions.kernel.ids.ChunkKeys;
+import dev.fablemc.factions.kernel.effect.ExternalEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.MembershipEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
-import dev.fablemc.factions.kernel.rules.ChestRules;
-import dev.fablemc.factions.kernel.rules.ClaimRules;
-import dev.fablemc.factions.kernel.rules.DisbandRules;
-import dev.fablemc.factions.kernel.rules.EconomyRules;
-import dev.fablemc.factions.kernel.rules.FactionAggregates;
 import dev.fablemc.factions.kernel.rules.FactionEdit;
-import dev.fablemc.factions.kernel.rules.InviteRules;
-import dev.fablemc.factions.kernel.rules.MergeRules;
-import dev.fablemc.factions.kernel.rules.MoneyMath;
-import dev.fablemc.factions.kernel.rules.NameRules;
 import dev.fablemc.factions.kernel.rules.PowerMath;
-import dev.fablemc.factions.kernel.rules.PrefRules;
-import dev.fablemc.factions.kernel.rules.RelationRules;
-import dev.fablemc.factions.kernel.rules.RoleRules;
-import dev.fablemc.factions.kernel.rules.TravelRules;
-import dev.fablemc.factions.kernel.state.ChestRef;
-import dev.fablemc.factions.kernel.state.ChestTable;
 import dev.fablemc.factions.kernel.state.EscrowTable;
 import dev.fablemc.factions.kernel.state.Faction;
-import dev.fablemc.factions.kernel.state.FactionArena;
-import dev.fablemc.factions.kernel.state.FactionClaimList;
-import dev.fablemc.factions.kernel.state.Home;
-import dev.fablemc.factions.kernel.state.InviteTable;
 import dev.fablemc.factions.kernel.state.KernelState;
-import dev.fablemc.factions.kernel.state.MergeTable;
-import dev.fablemc.factions.kernel.state.NameIndex;
 import dev.fablemc.factions.kernel.state.PlayerLedger;
 import dev.fablemc.factions.kernel.state.Rank;
-import dev.fablemc.factions.kernel.state.RelationEdges;
-import dev.fablemc.factions.kernel.state.RelationKind;
-import dev.fablemc.factions.kernel.state.Warp;
-import dev.fablemc.factions.kernel.state.WarpTable;
-import dev.fablemc.factions.kernel.state.ZoneStats;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.PowerSource;
-import dev.fablemc.factions.kernel.vocab.PagePhase;
+import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
-import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
-import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
-import dev.fablemc.factions.kernel.vocab.EscrowKind;
-import dev.fablemc.factions.kernel.vocab.BroadcastScope;
-import dev.fablemc.factions.kernel.vocab.BankTxType;
-import dev.fablemc.factions.kernel.intent.TravelIntent;
-import dev.fablemc.factions.kernel.intent.SystemIntent;
-import dev.fablemc.factions.kernel.intent.SessionIntent;
-import dev.fablemc.factions.kernel.intent.RoleIntent;
-import dev.fablemc.factions.kernel.intent.RelationIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.MembershipIntent;
-import dev.fablemc.factions.kernel.intent.LifecycleIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
-import dev.fablemc.factions.kernel.intent.ClaimIntent;
-import dev.fablemc.factions.kernel.intent.ChestIntent;
-import dev.fablemc.factions.kernel.effect.TravelEffect;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.SessionEffect;
-import dev.fablemc.factions.kernel.effect.RoleEffect;
-import dev.fablemc.factions.kernel.effect.RelationEffect;
-import dev.fablemc.factions.kernel.effect.PrefEffect;
-import dev.fablemc.factions.kernel.effect.PowerEffect;
-import dev.fablemc.factions.kernel.effect.MembershipEffect;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
-import dev.fablemc.factions.kernel.effect.ExternalEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
-import dev.fablemc.factions.kernel.effect.ChestEffect;
-import dev.fablemc.factions.kernel.effect.AuditEffect;
 
 /**
  * The reducer's confined working context plus the effect-buffer, envelope-rng, and common-lookup
@@ -92,10 +37,17 @@ import dev.fablemc.factions.kernel.effect.AuditEffect;
  * {@link Reducer#apply} call and is never published while mutable.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only. <b>Mutability:</b> confined,
- * single-threaded mutation of {@link #state} and {@link #effects} during one {@code apply}
+ * single-threaded mutation of {@link #state} and the effect buffer during one {@code apply}
  * call; nondeterminism comes only from the envelope ({@code epochMillis}, {@code tick},
  * {@code rngSeed}). New UUIDs are drawn from a per-envelope {@link SplittableRandom} seeded by
  * {@code rngSeed} — never {@code UUID.randomUUID} — which makes replay byte-identical.
+ *
+ * <p><b>Emission and guards.</b> The effect buffer is private: every effect leaves through
+ * {@link #emit} (or a named wrapper such as {@link #reject}, {@link #notify}, {@link #audit},
+ * {@link #continuation}), so seq/origin stamping and ordering have exactly one shape. Domain
+ * reducers use the standard guard idiom — {@code if (s.rejectIf(rule)) return;} for validator
+ * results, {@code factionOrReject}/{@code memberOfOrReject} for lookups — so a rejection is
+ * always a single expression at the call site.
  */
 final class ReduceSupport {
 
@@ -107,7 +59,7 @@ final class ReduceSupport {
     final long epochMillis;
     final int tick;
     final Origin origin;
-    final List<Effect> effects = new ArrayList<>(8);
+    private final List<Effect> effects = new ArrayList<>(8);
     private SplittableRandom rng;
     private final long rngSeed;
 
@@ -127,29 +79,73 @@ final class ReduceSupport {
         return new UUID(rng.nextLong(), rng.nextLong());
     }
 
+    /** Appends {@code effect} to this intent's ordered effect list — the only way out. */
+    void emit(Effect effect) {
+        effects.add(effect);
+    }
+
+    /** The reducer's result: the state as mutated so far plus the ordered effects. */
+    Reducer.Outcome outcome() {
+        return new Reducer.Outcome(state, effects);
+    }
+
     void reject(ReasonCode reason) {
-        effects.add(new FeedbackEffect.Rejected(seq, origin, reason, NO_ARGS));
+        emit(new FeedbackEffect.Rejected(seq, origin, reason, NO_ARGS));
     }
 
     void reject(ReasonCode reason, String... args) {
-        effects.add(new FeedbackEffect.Rejected(seq, origin, reason, args));
+        emit(new FeedbackEffect.Rejected(seq, origin, reason, args));
+    }
+
+    /**
+     * Single-expression guard: emits a rejection when a rule returned a {@code ReasonCode}.
+     * Call as {@code if (s.rejectIf(Rule.validate(...))) return;} — {@code true} means rejected.
+     */
+    boolean rejectIf(ReasonCode reason) {
+        if (reason == null) {
+            return false;
+        }
+        reject(reason);
+        return true;
+    }
+
+    /** Resolves {@code handle} to a live faction, or emits FACTION_NOT_FOUND and returns null. */
+    Faction factionOrReject(int handle) {
+        Faction f = resolve(handle);
+        if (f == null) {
+            reject(ReasonCode.FACTION_NOT_FOUND);
+        }
+        return f;
+    }
+
+    /**
+     * The member ordinal of {@code player} if that member currently belongs to faction ordinal
+     * {@code factionOrd}; otherwise emits {@code ifNot} and returns {@code -1}.
+     */
+    int memberOfOrReject(UUID player, int factionOrd, ReasonCode ifNot) {
+        int ord = memberOrd(player);
+        if (ord < 0 || FactionHandle.ordinal(memberFactionHandle(ord)) != factionOrd) {
+            reject(ifNot);
+            return -1;
+        }
+        return ord;
     }
 
     void audit(int factionHandle, UUID actor, FactionAuditAction action, String detail) {
-        effects.add(new AuditEffect.AuditRecorded(seq, origin, factionHandle, actor, action, detail));
+        emit(new AuditEffect.AuditRecorded(seq, origin, factionHandle, actor, action, detail));
     }
 
     void notify(UUID target, String key, String... args) {
-        effects.add(new FeedbackEffect.Notify(seq, origin, target, MessageKey.of(key), args));
+        emit(new FeedbackEffect.Notify(seq, origin, target, MessageKey.of(key), args));
     }
 
     void notifyFaction(int factionHandle, String key, String... args) {
-        effects.add(new FeedbackEffect.NotifyFaction(seq, origin, factionHandle, NotifyPredicate.MEMBERS_ALL,
+        emit(new FeedbackEffect.NotifyFaction(seq, origin, factionHandle, NotifyPredicate.MEMBERS_ALL,
                 MessageKey.of(key), args));
     }
 
     void continuation(Intent next) {
-        effects.add(new SystemEffect.ContinuationRequested(seq, origin, next));
+        emit(new SystemEffect.ContinuationRequested(seq, origin, next));
     }
 
     PowerConfig power() {
@@ -208,18 +204,16 @@ final class ReduceSupport {
 
     List<long[]> collectFactionClaims(int factionOrd, int limit) {
         ArrayList<long[]> out = new ArrayList<>();
-        int[] count = {0};
         state.claims().forEachClaim((worldIdx, chunkKey, ownerHandle) -> {
-            if (count[0] < limit && FactionHandle.ordinal(ownerHandle) == factionOrd) {
+            if (out.size() < limit && FactionHandle.ordinal(ownerHandle) == factionOrd) {
                 out.add(new long[] {worldIdx, chunkKey});
-                count[0]++;
             }
         });
         return out;
     }
 
     /** Removes up to a page of {@code factionOrd}'s claims (via the atlas scan); returns count. */
-    int removeUpToPageClaims(int factionOrd, int unusedNewOwner) {
+    int removeUpToPageClaims(int factionOrd) {
         List<long[]> batch = collectFactionClaims(factionOrd, Reducer.PAGE_SIZE);
         for (long[] wk : batch) {
             int world = (int) wk[0];
@@ -230,7 +224,7 @@ final class ReduceSupport {
                 state = state.withFactions(state.factions().replace(factionOrd,
                         FactionEdit.withLand(f, f.landCount() - 1, f.claims().remove(world, key))));
             }
-            effects.add(new ClaimEffect.ClaimRemoved(seq, origin, world, key,
+            emit(new ClaimEffect.ClaimRemoved(seq, origin, world, key,
                     state.factions().handleOf(factionOrd)));
         }
         return batch.size();
@@ -253,7 +247,7 @@ final class ReduceSupport {
                 state = state.withFactions(state.factions().replace(newOwnerOrd,
                         FactionEdit.withLand(dst, dst.landCount() + 1, dst.claims().add(world, key))));
             }
-            effects.add(new ClaimEffect.ClaimSet(seq, origin, world, key, newOwnerHandle,
+            emit(new ClaimEffect.ClaimSet(seq, origin, world, key, newOwnerHandle,
                     state.factions().handleOf(factionOrd)));
         }
         return batch.size();
@@ -268,7 +262,7 @@ final class ReduceSupport {
             if (l.has(i) && FactionHandle.ordinal(l.factionHandle(i)) == factionOrd) {
                 UUID uuid = l.uuid(i);
                 l = l.withFactionHandle(i, NO_HANDLE).withRankIdx(i, 0);
-                effects.add(new MembershipEffect.MemberLeft(seq, origin,
+                emit(new MembershipEffect.MemberLeft(seq, origin,
                         state.factions().handleOf(factionOrd), uuid, false));
                 cleared++;
             }
@@ -286,7 +280,7 @@ final class ReduceSupport {
                 UUID uuid = l.uuid(i);
                 l = l.withFactionHandle(i, toHandle).withRankIdx(i, toDefaultRankIdx)
                         .withJoinedAt(i, epochMillis);
-                effects.add(new MembershipEffect.MemberJoined(seq, origin, toHandle, uuid));
+                emit(new MembershipEffect.MemberJoined(seq, origin, toHandle, uuid));
                 moved++;
             }
         }
@@ -304,15 +298,15 @@ final class ReduceSupport {
         });
         for (EscrowTable.Escrow e : toRefund) {
             state = state.withEscrows(state.escrows().settle(e.id()));
-            effects.add(new ExternalEffect.EscrowRefund(seq, origin, e.id(), e.player(), e.amount()));
+            emit(new ExternalEffect.EscrowRefund(seq, origin, e.id(), e.player(), e.amount()));
         }
     }
 
     String fmt1(double v) {
-        return String.format(java.util.Locale.ROOT, "%.1f", v);
+        return String.format(Locale.ROOT, "%.1f", v);
     }
 
     String fmt2(double v) {
-        return String.format(java.util.Locale.ROOT, "%.2f", v);
+        return String.format(Locale.ROOT, "%.2f", v);
     }
 }

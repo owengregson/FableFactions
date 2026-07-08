@@ -50,7 +50,7 @@ public final class FeedbackCodec {
                 Wire.writeString(o, x.reason() == null ? null : x.reason().name());
                 Wire.writeStringArray(o, x.args());
             }
-            default -> throw new IllegalStateException("not a feedback tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.FEEDBACK);
         }
     }
 
@@ -70,7 +70,7 @@ public final class FeedbackCodec {
             case REJECTED ->
                     new FeedbackEffect.Rejected(seq, origin, Wire.readReasonCode(in),
                             Wire.readStringArray(in));
-            default -> throw new IllegalStateException("not a feedback tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.FEEDBACK);
         };
     }
 }

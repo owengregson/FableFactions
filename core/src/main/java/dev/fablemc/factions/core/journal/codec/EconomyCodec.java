@@ -40,7 +40,7 @@ public final class EconomyCodec {
                 o.writeDouble(x.amount());
                 o.writeDouble(x.balance());
             }
-            default -> throw new IllegalStateException("not an economy tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.ECONOMY);
         }
     }
 
@@ -54,7 +54,7 @@ public final class EconomyCodec {
             case TAX_CHARGED ->
                     new EconomyEffect.TaxCharged(seq, origin, in.readInt(), in.readDouble(),
                             in.readDouble());
-            default -> throw new IllegalStateException("not an economy tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.ECONOMY);
         };
     }
 }

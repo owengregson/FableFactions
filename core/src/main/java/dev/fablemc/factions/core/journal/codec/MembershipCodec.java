@@ -47,7 +47,7 @@ public final class MembershipCodec {
                 Wire.writeUuid(o, x.invitee());
                 o.writeInt(x.reason().code());
             }
-            default -> throw new IllegalStateException("not a membership tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.MEMBERSHIP);
         }
     }
 
@@ -65,7 +65,7 @@ public final class MembershipCodec {
             case INVITE_REMOVED ->
                     new MembershipEffect.InviteRemoved(seq, origin, in.readInt(), Wire.readUuid(in),
                             InviteRemovalReason.fromCode(in.readInt()));
-            default -> throw new IllegalStateException("not a membership tag: " + tag);
+            default -> throw tag.outside(EffectTag.Domain.MEMBERSHIP);
         };
     }
 }

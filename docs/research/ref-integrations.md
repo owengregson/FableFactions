@@ -1,7 +1,7 @@
 # FableFactions Spec — Third-Party Integrations (`integration/` package)
 
-Clean-room behavioral spec for the `com.pvpindex.factions.integration` package of the
-legacy PvPIndex factions plugin. Covers **Vault, WorldGuard, PlaceholderAPI, EssentialsX,
+Clean-room behavioral spec for the `com.reference.factions.integration` package of the
+legacy reference factions plugin. Covers **Vault, WorldGuard, PlaceholderAPI, EssentialsX,
 dynmap, LWC/LWCX, DiscordSRV, EzCountdown**. An implementer who has never seen the source
 must be able to reproduce every behavior below exactly.
 
@@ -323,10 +323,10 @@ and warps/auto-claim are never blocked by WG.
 exists (`isPlaceholderApiEnabled()`, default true) but the hook is gated **only on plugin
 presence** — the config toggle is not consulted here.
 
-Expansion metadata: identifier `pvpindex`, author `gyvex`, version `1.0.0`, `persist()` =
+Expansion metadata: identifier `reference`, author `gyvex`, version `1.0.0`, `persist()` =
 `true` (survives PlaceholderAPI reloads).
 
-### 3.2 Placeholders — `%pvpindex_<param>%`
+### 3.2 Placeholders — reference used a prefixed set; FableFactions ships `%fable_<param>%` (same param list)
 `onRequest(OfflinePlayer, params)` catches `StorageException` → logs `WARNING
 "PlaceholderAPI lookup failed for <params>"` and returns `""`. It first loads
 `PlayerModel` by `player.getUniqueId().toString()`. Resolution is an exact-match `switch`:
@@ -437,15 +437,15 @@ log `INFO "dynmap hooked - faction territory layer enabled."`, `setDynmapEnabled
 1. `getPlugin("dynmap")`; null or not enabled → return `false`.
 2. Cast to `DynmapAPI`; `markerApi = dynmapApi.getMarkerAPI()`; if null → `WARNING "dynmap
    MarkerAPI not ready — faction territory layer skipped."` return `false`.
-3. **Delete any stale marker set** with id `pvpindex_factions` (from a prior `/fa reload`).
-4. `markerSet = markerApi.createMarkerSet("pvpindex_factions", "Factions", null, false)`;
+3. **Delete any stale marker set** with the plugin's own layer id (from a prior `/fa reload`).
+4. `markerSet = markerApi.createMarkerSet("fablefactions", "Factions", null, false)`;
    null → `WARNING "Failed to create dynmap faction marker set."` return `false`.
 5. `markerSet.setHideByDefault(false)` and `markerSet.setLayerPriority(5)`.
 6. Schedule `loadAllClaims` **one tick later** (via `taskScheduler.runSync(...)` if present,
    else `getScheduler().runTask(plugin, ...)`) so dynmap finishes its own init.
 7. Register `this` as a Bukkit listener. Return `true`.
 
-Constants: layer id `pvpindex_factions`, label `Factions`.
+Constants: FableFactions layer id `fablefactions`, label `Factions`.
 
 ### 5.2 Colour palette (LOAD-BEARING)
 8-entry RGB palette (0xRRGGBB):
@@ -696,7 +696,7 @@ INFO "EzCountdown hooked — faction relation announcements enabled."
 (The notifier instance is always stored on infra, enabled or not.)
 
 `EzCountdownNotifier.setup()`: `getPlugin("EzCountdown") == null` → false. Else reflectively
-`Class.forName("com.pvpindex.factions.integration.ezcountdown.EzCountdownNotifierImpl")
+`Class.forName("com.reference.factions.integration.ezcountdown.EzCountdownNotifierImpl")
 .getDeclaredConstructor(Logger.class).newInstance(logger)` → cast to `EzCountdownSender`
 delegate; return true. Any exception → `WARNING "Failed to load EzCountdown integration:
 <msg>"`, false. `isEnabled()` = `delegate != null && delegate.isEnabled()`.
@@ -804,9 +804,9 @@ build handlers run at `HIGH`/`HIGHEST`.
    (DiscordSRV/LWCX/EzCountdown façade) safe to load always.
 2. Every enable gate = config toggle AND plugin presence (except PlaceholderAPI & dynmap init,
    which gate on presence only despite having config accessors).
-3. Preserve exact string constants: dynmap layer id `pvpindex_factions`/label `Factions`,
+3. String constants: FableFactions dynmap layer id `fablefactions`/label `Factions`,
    palette, marker-id `~` format; WG region-name `f_<world>_<x>_<z>` with `n`-prefixed
-   negatives; PlaceholderAPI identifier `pvpindex`; DiscordSRV class `github.scarsz.discordsrv.DiscordSRV`.
+   negatives; PlaceholderAPI identifier `reference`; DiscordSRV class `github.scarsz.discordsrv.DiscordSRV`.
 4. Preserve failure modes: WG `canModifyTerritory` fails **open** (true); Vault mutations fail
    on non-positive amounts; reflection failures swallowed (LWC FINE/WARNING, DiscordSRV WARNING).
 5. Preserve async/tick semantics: dynmap `loadAllClaims` +1 tick; WG incremental saves async /

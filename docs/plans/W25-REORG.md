@@ -141,7 +141,7 @@ definitions. No file in kernel/intent, kernel/effect > 250 lines.
 - Move `BaselineLoader` → `storage/load/BaselineLoader.java` (orchestrator ≤200) +
   `storage/load/` per-table readers (`FactionRows`, `MemberRows`, `BoardRows`,
   `AncillaryRows` — warps/invites/chests/ranks/inbox/escrows).
-- Move `PvpIndexImporter` → `storage/legacy/PvpIndexImporter.java` (orchestrator) +
+- Move `the (removed) legacy importer` → `storage/legacy/the (removed) legacy importer.java` (orchestrator) +
   `storage/legacy/` readers/sanitizers (`LegacyBoardReader`, `LegacyJsonBlobs`,
   `LegacySanitizer`).
 - Update ArchUnit rules if package moves affect them (java.sql allowed in storage.* —
