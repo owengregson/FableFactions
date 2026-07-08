@@ -123,16 +123,14 @@ public final class IntentBus {
         return n;
     }
 
-    /** Approximate depth across both lanes (telemetry / tests). */
+    /**
+     * Approximate depth across both lanes (telemetry / tests). Each coalesced {@code PowerTick}/
+     * {@code TaxSweep} is represented by exactly one FIFO placeholder token in {@link #systemLane}
+     * (offered once when its slot goes empty→pending), so {@code systemLane.size()} already counts
+     * it — the pending refs must NOT be added again or a single pending tick would be double-counted.
+     */
     public int depth() {
-        int sys = systemLane.size();
-        if (pendingPowerTick.get() != null) {
-            sys++;
-        }
-        if (pendingTaxSweep.get() != null) {
-            sys++;
-        }
-        return playerCount.get() + sys;
+        return playerCount.get() + systemLane.size();
     }
 
     /** Rejects all new player intents (shutdown phase 1, proposal-C §6.4). System lane stays open. */

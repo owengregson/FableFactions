@@ -6,12 +6,16 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import dev.fablemc.factions.kernel.audit.FactionAuditAction;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
@@ -21,6 +25,12 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
  * Every effect record has an explicit, never-reused {@code u16} tag (the record's {@code type}
  * field in the WAL framing); the {@link #verifyComplete()} boot check fails loudly if the sealed
  * {@link Effect} hierarchy ever grows a record without a tag here.
+ *
+ * <p>{@link Effect.ContinuationRequested} is the sole <b>control effect</b>: it carries an
+ * {@link Intent} back into the pipeline (AM-5) and is stripped by the writer before fan-out, so
+ * it never reaches the journal and deliberately has no tag. {@link #CONTROL_EFFECTS} records that
+ * exclusion, and {@link #verifyComplete()} skips it — every <em>other</em> permitted subtype must
+ * have a stable tag.
  *
  * <p><b>Owning thread(s):</b> stateless static codec; encode on the writer, decode on the
  * storage/replay thread. <b>Mutability:</b> the tag tables are shared immutable maps.
@@ -99,6 +109,15 @@ public final class JournalCodec {
 
     private static final Map<Class<? extends Effect>, Integer> TAGS = buildTagTable();
 
+    /**
+     * The permitted {@link Effect} subtypes that are intentionally NOT journaled: pipeline
+     * control effects stripped by the writer before fan-out. They carry no persistable domain
+     * delta, so they have no tag and are excluded from {@link #verifyComplete()}.
+     */
+    static final Set<Class<? extends Effect>> CONTROL_EFFECTS =
+            Collections.unmodifiableSet(new HashSet<>(java.util.List.of(
+                    Effect.ContinuationRequested.class)));
+
     private JournalCodec() {
     }
 
@@ -148,6 +167,9 @@ public final class JournalCodec {
         }
         StringBuilder missing = new StringBuilder();
         for (Class<?> sub : permitted) {
+            if (CONTROL_EFFECTS.contains(sub)) {
+                continue;   // control effect: stripped before journaling, deliberately untagged
+            }
             if (!TAGS.containsKey(sub)) {
                 if (missing.length() > 0) {
                     missing.append(", ");
@@ -168,6 +190,11 @@ public final class JournalCodec {
                         + " for " + prior.getSimpleName() + " and " + en.getKey().getSimpleName());
             }
         }
+    }
+
+    /** The set of effect record classes that carry a stable tag (package-visible for tests). */
+    static Set<Class<? extends Effect>> registeredEffectClasses() {
+        return Collections.unmodifiableSet(new HashSet<>(TAGS.keySet()));
     }
 
     // ── Encode bodies ─────────────────────────────────────────────────────────────────────

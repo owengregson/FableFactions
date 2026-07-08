@@ -12,6 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Reducer;
@@ -23,6 +24,12 @@ import dev.fablemc.factions.kernel.state.KernelState;
  * drains up to {@value #MAX_DRAIN} envelopes, reduces each inside its own failure boundary,
  * publishes exactly one snapshot per batch, then hands the ordered effect batch to the journal
  * sink and the fanout sink in that order.
+ *
+ * <p>Paged continuations (AM-5): a reducer step may emit an {@link Effect.ContinuationRequested}
+ * carrying the next page's {@link Intent}. That control effect is <b>not</b> a domain effect — it
+ * is stripped from the batch before journaling/fanout, and its intent is re-enqueued on the
+ * system lane <em>after</em> the intermediate snapshot is published, so interleaved intents
+ * observe consistent shrinking-but-valid paged states.
  *
  * <p><b>Owning thread(s):</b> everything after construction runs on the one writer thread — it
  * is the ONLY mutator of {@link KernelState}, the seq counter and the circuit breaker.
@@ -139,6 +146,7 @@ public final class WriterThread {
             return 0;
         }
         List<Effect> effects = new ArrayList<>();
+        List<Intent> continuations = null;   // AM-5: re-enqueued after publish, lazily allocated
         KernelState working = state;
         long now = clock.getAsLong();
         long lastSeq = nextSeq;
@@ -158,7 +166,19 @@ public final class WriterThread {
                 working = outcome.next();
                 List<Effect> produced = outcome.effects();
                 if (produced != null && !produced.isEmpty()) {
-                    effects.addAll(produced);
+                    for (int j = 0; j < produced.size(); j++) {
+                        Effect effect = produced.get(j);
+                        if (effect instanceof Effect.ContinuationRequested cr) {
+                            // AM-5 paged-continuation control: NOT a domain effect — never journaled
+                            // or fanned out. Re-enqueue its intent on the system lane after publish.
+                            if (continuations == null) {
+                                continuations = new ArrayList<>(2);
+                            }
+                            continuations.add(cr.next());
+                        } else {
+                            effects.add(effect);
+                        }
+                    }
                 }
             } catch (RuntimeException reducerBug) {
                 // AM-9: keep the pre-intent state, reject, log once, arm the breaker, continue.
@@ -175,6 +195,13 @@ public final class WriterThread {
         List<Effect> published = Collections.unmodifiableList(effects);
         journalSink.accept(published, lastSeq);
         fanoutSink.accept(published, lastSeq);
+        // AM-5: re-enqueue continuation intents on the system lane BEHIND anything queued during
+        // this batch, so interleaved intents observe consistent intermediate paged states.
+        if (continuations != null) {
+            for (int i = 0; i < continuations.size(); i++) {
+                bus.submitSystem(continuations.get(i));
+            }
+        }
         return n;
     }
 

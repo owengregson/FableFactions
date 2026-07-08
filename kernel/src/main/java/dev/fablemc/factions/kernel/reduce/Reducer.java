@@ -1051,6 +1051,13 @@ public final class Reducer {
         }
 
         void removeZoneChunk(Intent.RemoveZoneChunk c) {
+            // Only the SAFEZONE/WARZONE sentinels are zones; a normal ordinal here would strip an
+            // atlas claim without decrementing that faction's landCount (aggregate desync).
+            if (c.zoneOrdinal() != FactionHandle.SAFEZONE_ORDINAL
+                    && c.zoneOrdinal() != FactionHandle.WARZONE_ORDINAL) {
+                reject(ReasonCode.FLAG_INVALID);
+                return;
+            }
             int owner = state.claims().ownerAt(c.worldIdx(), c.key());
             if (owner == NO_HANDLE || FactionHandle.ordinal(owner) != c.zoneOrdinal()) {
                 return;
@@ -1397,6 +1404,12 @@ public final class Reducer {
             Faction to = resolve(c.to());
             if (from == null || to == null) {
                 reject(ReasonCode.FACTION_NOT_FOUND);
+                return;
+            }
+            // A self-transfer would double-apply the same slot (credit computed from the pre-debit
+            // balance overwrites the debit), fabricating money — reject before touching the bank.
+            if (from.idx() == to.idx()) {
+                reject(ReasonCode.INVALID_AMOUNT);
                 return;
             }
             double amount = MoneyMath.round2(c.amount());
