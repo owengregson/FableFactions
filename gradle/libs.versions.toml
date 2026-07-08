@@ -8,8 +8,8 @@
 # 1.16.5; io.papermc.paper starts only at 1.17. Compiling core against the 1.13 API
 # (version-deltas §3.17) shrinks the 1.13–1.16 probe band to ~zero.
 paper-floor = "1.13.2-R0.1-SNAPSHOT"
-paper-folia = "1.20.4-R0.1-SNAPSHOT"
-paper-modern = "1.20.6-R0.1-SNAPSHOT"
+paper-folia = "26.1.2.build.74-stable"
+paper-modern = "26.1.2.build.74-stable"
 
 # Shaded + relocated into the FableFactions jar (dev.fablemc.factions.lib.adventure)
 # so a self-contained Adventure — the legacy-string serializer especially — is
