@@ -16,6 +16,22 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Kern.Session;
 import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.RelationKind;
+import dev.fablemc.factions.kernel.vocab.Relation;
+import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
+import dev.fablemc.factions.kernel.vocab.ClaimMode;
+import dev.fablemc.factions.kernel.intent.TravelIntent;
+import dev.fablemc.factions.kernel.intent.RelationIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.MembershipIntent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.ChestIntent;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.ExternalEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /** Saga-level pins: economy/escrow (AM-7), tax, zones, disband scrub (AM-6), merge, AM-5 paging. */
 class ReducerSagaTest {
@@ -27,32 +43,32 @@ class ReducerSagaTest {
         Session s = Session.empty(Kern.cfgDefault());
         int fa = s.createFaction("Alpha", Kern.player(0));
         // deposit (phase-2 credit)
-        s.apply(new Intent.CreditBank(fa, 100.0, Kern.player(0), 1L));
+        s.apply(new EconomyIntent.CreditBank(fa, 100.0, Kern.player(0), 1L));
         assertEquals(100.0, s.state.factions().resolve(fa).bank(), 1e-9);
 
         // withdraw opens an escrow and requests payout
-        List<Effect> w = s.apply(new Intent.RequestBankWithdrawal(fa, 40.0, Kern.player(0)));
+        List<Effect> w = s.apply(new EconomyIntent.RequestBankWithdrawal(fa, 40.0, Kern.player(0)));
         assertEquals(60.0, s.state.factions().resolve(fa).bank(), 1e-9);
         assertEquals(40.0, s.state.escrows().openTotal(), 1e-9);
         long escrowId = payoutId(w);
         assertTrue(escrowId >= 0);
-        assertEquals(1, Kern.countType(w, Effect.PayoutRequested.class));
+        assertEquals(1, Kern.countType(w, ExternalEffect.PayoutRequested.class));
 
         // settle OK: escrow removed, no bank change (money delivered to the wallet)
-        s.apply(new Intent.SettleEscrow(escrowId, Intent.ESCROW_OK));
+        s.apply(new EconomyIntent.SettleEscrow(escrowId, EscrowOutcome.OK));
         assertEquals(0.0, s.state.escrows().openTotal(), 1e-9);
         assertEquals(60.0, s.state.factions().resolve(fa).bank(), 1e-9);
 
         // withdraw again, then FAIL: bank re-credited, escrow closed (conservation)
-        long id2 = payoutId(s.apply(new Intent.RequestBankWithdrawal(fa, 30.0, Kern.player(0))));
+        long id2 = payoutId(s.apply(new EconomyIntent.RequestBankWithdrawal(fa, 30.0, Kern.player(0))));
         assertEquals(30.0, s.state.factions().resolve(fa).bank(), 1e-9);
-        s.apply(new Intent.SettleEscrow(id2, Intent.ESCROW_FAILED));
+        s.apply(new EconomyIntent.SettleEscrow(id2, EscrowOutcome.FAILED));
         assertEquals(60.0, s.state.factions().resolve(fa).bank(), 1e-9);
         assertEquals(0.0, s.state.escrows().openTotal(), 1e-9);
 
         // insufficient funds
         assertEquals(ReasonCode.INSUFFICIENT_FUNDS, Kern.firstReason(
-                s.apply(new Intent.RequestBankWithdrawal(fa, 1000.0, Kern.player(0)))));
+                s.apply(new EconomyIntent.RequestBankWithdrawal(fa, 1000.0, Kern.player(0)))));
     }
 
     @Test
@@ -60,9 +76,9 @@ class ReducerSagaTest {
         Session s = Session.empty(Kern.cfgDefault());
         int fa = s.createFaction("Alpha", Kern.player(0));
         int fb = s.createFaction("Beta", Kern.player(1));
-        s.apply(new Intent.CreditBank(fa, 100.0, Kern.player(0), 1L));
+        s.apply(new EconomyIntent.CreditBank(fa, 100.0, Kern.player(0), 1L));
         double before = s.state.factions().resolve(fa).bank() + s.state.factions().resolve(fb).bank();
-        s.apply(new Intent.TransferBank(fa, fb, 30.0, Kern.player(0)));
+        s.apply(new EconomyIntent.TransferBank(fa, fb, 30.0, Kern.player(0)));
         assertEquals(70.0, s.state.factions().resolve(fa).bank(), 1e-9);
         assertEquals(30.0, s.state.factions().resolve(fb).bank(), 1e-9);
         double after = s.state.factions().resolve(fa).bank() + s.state.factions().resolve(fb).bank();
@@ -70,7 +86,7 @@ class ReducerSagaTest {
 
         // Self-transfer must NOT fabricate money (regression: the credit was computed from the
         // pre-debit balance and overwrote the debit). Now rejected, bank untouched.
-        List<Effect> self = s.apply(new Intent.TransferBank(fa, fa, 10.0, Kern.player(0)));
+        List<Effect> self = s.apply(new EconomyIntent.TransferBank(fa, fa, 10.0, Kern.player(0)));
         assertEquals(ReasonCode.INVALID_AMOUNT, Kern.firstReason(self));
         assertEquals(70.0, s.state.factions().resolve(fa).bank(), 1e-9);
     }
@@ -79,15 +95,15 @@ class ReducerSagaTest {
     void periodicTaxChargesRoundedAmount() {
         Session s = new Session(KernelState.empty(Kern.cfgTax(0.05, 0.0, 0.01)));
         int fa = s.createFaction("Alpha", Kern.player(0));
-        s.apply(new Intent.CreditBank(fa, 1000.0, Kern.player(0), 1L));
-        List<Effect> sweep = s.apply(new Intent.TaxSweep(1));
-        assertEquals(1, Kern.countType(sweep, Effect.TaxCharged.class));
+        s.apply(new EconomyIntent.CreditBank(fa, 1000.0, Kern.player(0), 1L));
+        List<Effect> sweep = s.apply(new EconomyIntent.TaxSweep(1));
+        assertEquals(1, Kern.countType(sweep, EconomyEffect.TaxCharged.class));
         assertEquals(950.0, s.state.factions().resolve(fa).bank(), 1e-9);
         // empty-bank faction pays no tax
         int fb = s.createFaction("Beta", Kern.player(1));
-        List<Effect> sweep2 = s.apply(new Intent.TaxSweep(2));
+        List<Effect> sweep2 = s.apply(new EconomyIntent.TaxSweep(2));
         // only Alpha (now 950) is taxed again; Beta (bank 0) is skipped
-        assertEquals(1, Kern.countType(sweep2, Effect.TaxCharged.class));
+        assertEquals(1, Kern.countType(sweep2, EconomyEffect.TaxCharged.class));
         assertEquals(0.0, s.state.factions().resolve(fb).bank(), 1e-9);
     }
 
@@ -97,27 +113,27 @@ class ReducerSagaTest {
     void zoneAssignmentOverFactionAndRemoval() {
         Session s = Session.empty(Kern.cfgDefault());
         int fa = s.createFaction("Alpha", Kern.player(0));
-        s.apply(new Intent.AdminClaimChunks(fa, 0, new long[] {ChunkKeys.key(0, 0)}, Kern.player(999)));
+        s.apply(new ClaimIntent.AdminClaimChunks(fa, 0, new long[] {ChunkKeys.key(0, 0)}, Kern.player(999)));
         assertEquals(1, s.state.factions().resolve(fa).landCount());
 
         // Convert the faction chunk to SAFEZONE: faction land is decremented, atlas re-owned.
-        List<Effect> z = s.apply(new Intent.SetZoneChunks(FactionHandle.SAFEZONE_ORDINAL, 0,
+        List<Effect> z = s.apply(new ClaimIntent.SetZoneChunks(FactionHandle.SAFEZONE_ORDINAL, 0,
                 new long[] {ChunkKeys.key(0, 0)}, Kern.player(999)));
-        assertEquals(1, Kern.countType(z, Effect.ZoneSet.class));
+        assertEquals(1, Kern.countType(z, ClaimEffect.ZoneSet.class));
         assertEquals(0, s.state.factions().resolve(fa).landCount());
         assertEquals(FactionHandle.SAFEZONE_ORDINAL,
                 FactionHandle.ordinal(s.state.claims().ownerAt(0, ChunkKeys.key(0, 0))));
         assertEquals(1, s.state.zones().safezoneChunks());
 
         // Remove it from the zone.
-        List<Effect> r = s.apply(new Intent.RemoveZoneChunk(FactionHandle.SAFEZONE_ORDINAL, 0,
+        List<Effect> r = s.apply(new ClaimIntent.RemoveZoneChunk(FactionHandle.SAFEZONE_ORDINAL, 0,
                 ChunkKeys.key(0, 0), Kern.player(999)));
-        assertEquals(1, Kern.countType(r, Effect.ZoneRemoved.class));
+        assertEquals(1, Kern.countType(r, ClaimEffect.ZoneRemoved.class));
         assertEquals(0, s.state.zones().safezoneChunks());
 
         // Invalid zone ordinals are rejected, not applied.
         assertEquals(ReasonCode.FLAG_INVALID, Kern.firstReason(
-                s.apply(new Intent.SetZoneChunks(7, 0, new long[] {ChunkKeys.key(1, 0)}, Kern.player(999)))));
+                s.apply(new ClaimIntent.SetZoneChunks(7, 0, new long[] {ChunkKeys.key(1, 0)}, Kern.player(999)))));
     }
 
     @Test
@@ -126,9 +142,9 @@ class ReducerSagaTest {
         // decrementing the faction's landCount (aggregate desync). Now guarded.
         Session s = Session.empty(Kern.cfgDefault());
         int fa = s.createFaction("Alpha", Kern.player(0));
-        s.apply(new Intent.AdminClaimChunks(fa, 0, new long[] {ChunkKeys.key(5, 5)}, Kern.player(999)));
+        s.apply(new ClaimIntent.AdminClaimChunks(fa, 0, new long[] {ChunkKeys.key(5, 5)}, Kern.player(999)));
         int ord = FactionHandle.ordinal(fa);
-        List<Effect> r = s.apply(new Intent.RemoveZoneChunk(ord, 0, ChunkKeys.key(5, 5), Kern.player(999)));
+        List<Effect> r = s.apply(new ClaimIntent.RemoveZoneChunk(ord, 0, ChunkKeys.key(5, 5), Kern.player(999)));
         assertEquals(ReasonCode.FLAG_INVALID, Kern.firstReason(r));
         assertEquals(1, s.state.factions().resolve(fa).landCount());
         assertEquals(ord, FactionHandle.ordinal(s.state.claims().ownerAt(0, ChunkKeys.key(5, 5))));
@@ -143,13 +159,13 @@ class ReducerSagaTest {
             keys[i] = ChunkKeys.key(i, 0);
         }
         // First page only: at most PAGE_SIZE zone sets + a continuation for the rest.
-        List<Effect> first = s.step(new Intent.SetZoneChunks(FactionHandle.WARZONE_ORDINAL, 0, keys, Kern.player(999)));
-        assertTrue(Kern.countType(first, Effect.ZoneSet.class) <= Reducer.PAGE_SIZE);
-        assertEquals(1, Kern.countType(first, Effect.ContinuationRequested.class));
+        List<Effect> first = s.step(new ClaimIntent.SetZoneChunks(FactionHandle.WARZONE_ORDINAL, 0, keys, Kern.player(999)));
+        assertTrue(Kern.countType(first, ClaimEffect.ZoneSet.class) <= Reducer.PAGE_SIZE);
+        assertEquals(1, Kern.countType(first, SystemEffect.ContinuationRequested.class));
 
         // Full drive from scratch sets every chunk.
         Session s2 = Session.empty(Kern.cfgDefault());
-        s2.apply(new Intent.SetZoneChunks(FactionHandle.WARZONE_ORDINAL, 0, keys, Kern.player(999)));
+        s2.apply(new ClaimIntent.SetZoneChunks(FactionHandle.WARZONE_ORDINAL, 0, keys, Kern.player(999)));
         assertEquals(n, s2.state.zones().warzoneChunks());
         assertEquals(n, Kern.atlasCountForZone(s2.state, FactionHandle.WARZONE_ORDINAL));
     }
@@ -164,21 +180,21 @@ class ReducerSagaTest {
         int ordA = FactionHandle.ordinal(fa);
         s.connect(Kern.player(0));
         s.setPower(Kern.player(0), 10.0);
-        s.apply(new Intent.SetFactionFlag(fa, dev.fablemc.factions.kernel.state.Faction.FLAG_OPEN,
+        s.apply(new PrefIntent.SetFactionFlag(fa, dev.fablemc.factions.kernel.state.Faction.FLAG_OPEN,
                 true, false, Kern.player(0)));
-        s.apply(new Intent.JoinFaction(fa, Kern.player(2), Intent.OPEN_JOIN));
-        s.apply(new Intent.ClaimChunks(Kern.player(0), fa, 0,
-                new long[] {ChunkKeys.key(0, 0), ChunkKeys.key(1, 0)}, 0));
-        s.apply(new Intent.SetWarp(fa, "base", 0, 1, 2, 3, 0, 0, Kern.player(0)));
-        s.apply(new Intent.CreateChest(fa, "vault", Kern.player(0)));
-        s.apply(new Intent.SendInvite(fa, Kern.player(0), Kern.player(3)));
-        s.apply(new Intent.DeclareRelation(fa, fb, RelationKind.ENEMY, Kern.player(0)));
-        s.apply(new Intent.CreditBank(fa, 50.0, Kern.player(0), 1L));
-        s.apply(new Intent.RequestBankWithdrawal(fa, 20.0, Kern.player(0)));
+        s.apply(new MembershipIntent.JoinFaction(fa, Kern.player(2), MembershipIntent.OPEN_JOIN));
+        s.apply(new ClaimIntent.ClaimChunks(Kern.player(0), fa, 0,
+                new long[] {ChunkKeys.key(0, 0), ChunkKeys.key(1, 0)}, ClaimMode.SINGLE));
+        s.apply(new TravelIntent.SetWarp(fa, "base", 0, 1, 2, 3, 0, 0, Kern.player(0)));
+        s.apply(new ChestIntent.CreateChest(fa, "vault", Kern.player(0)));
+        s.apply(new MembershipIntent.SendInvite(fa, Kern.player(0), Kern.player(3)));
+        s.apply(new RelationIntent.DeclareRelation(fa, fb, Relation.ENEMY, Kern.player(0)));
+        s.apply(new EconomyIntent.CreditBank(fa, 50.0, Kern.player(0), 1L));
+        s.apply(new EconomyIntent.RequestBankWithdrawal(fa, 20.0, Kern.player(0)));
 
-        List<Effect> d = s.apply(new Intent.DisbandFaction(fa, true, Kern.player(0)));
-        assertEquals(1, Kern.countType(d, Effect.FactionDisbanded.class));
-        assertTrue(Kern.countType(d, Effect.EscrowRefund.class) >= 1, "open escrow refunded");
+        List<Effect> d = s.apply(new LifecycleIntent.DisbandFaction(fa, true, Kern.player(0)));
+        assertEquals(1, Kern.countType(d, LifecycleEffect.FactionDisbanded.class));
+        assertTrue(Kern.countType(d, ExternalEffect.EscrowRefund.class) >= 1, "open escrow refunded");
         assertNull(s.state.factions().resolve(fa), "faction slot freed");
         String dangling = Kern.danglingRefs(s.state, ordA, "alpha");
         assertEquals("", dangling, "no dangling references: " + dangling);
@@ -197,21 +213,21 @@ class ReducerSagaTest {
         s.connect(Kern.player(1));
         s.setPower(Kern.player(0), 10.0);
         s.setPower(Kern.player(1), 10.0);
-        s.apply(new Intent.ClaimChunks(Kern.player(0), fa, 0,
-                new long[] {ChunkKeys.key(0, 0), ChunkKeys.key(1, 0)}, 0));
-        s.apply(new Intent.ClaimChunks(Kern.player(1), fb, 0,
-                new long[] {ChunkKeys.key(10, 10), ChunkKeys.key(11, 10)}, 0));
-        s.apply(new Intent.SetFactionFlag(fa, dev.fablemc.factions.kernel.state.Faction.FLAG_OPEN,
+        s.apply(new ClaimIntent.ClaimChunks(Kern.player(0), fa, 0,
+                new long[] {ChunkKeys.key(0, 0), ChunkKeys.key(1, 0)}, ClaimMode.SINGLE));
+        s.apply(new ClaimIntent.ClaimChunks(Kern.player(1), fb, 0,
+                new long[] {ChunkKeys.key(10, 10), ChunkKeys.key(11, 10)}, ClaimMode.SINGLE));
+        s.apply(new PrefIntent.SetFactionFlag(fa, dev.fablemc.factions.kernel.state.Faction.FLAG_OPEN,
                 true, false, Kern.player(0)));
-        s.apply(new Intent.JoinFaction(fa, Kern.player(2), Intent.OPEN_JOIN));
-        s.apply(new Intent.SetWarp(fa, "base", 0, 1, 2, 3, 0, 0, Kern.player(0)));
-        s.apply(new Intent.CreditBank(fa, 50.0, Kern.player(0), 1L));
-        s.apply(new Intent.CreditBank(fb, 20.0, Kern.player(1), 2L));
+        s.apply(new MembershipIntent.JoinFaction(fa, Kern.player(2), MembershipIntent.OPEN_JOIN));
+        s.apply(new TravelIntent.SetWarp(fa, "base", 0, 1, 2, 3, 0, 0, Kern.player(0)));
+        s.apply(new EconomyIntent.CreditBank(fa, 50.0, Kern.player(0), 1L));
+        s.apply(new EconomyIntent.CreditBank(fb, 20.0, Kern.player(1), 2L));
 
-        s.apply(new Intent.SendMergeRequest(fa, fb, Kern.player(1)));
-        List<Effect> m = s.apply(new Intent.AcceptMergeRequest(fa, fb, Kern.player(1)));
+        s.apply(new LifecycleIntent.SendMergeRequest(fa, fb, Kern.player(1)));
+        List<Effect> m = s.apply(new LifecycleIntent.AcceptMergeRequest(fa, fb, Kern.player(1)));
 
-        assertEquals(1, Kern.countType(m, Effect.MergeCompleted.class));
+        assertEquals(1, Kern.countType(m, LifecycleEffect.MergeCompleted.class));
         assertNull(s.state.factions().resolve(fa), "sender freed");
         assertEquals(4, s.state.factions().resolve(fb).landCount(), "claims absorbed");
         assertEquals(70.0, s.state.factions().resolve(fb).bank(), 1e-9);
@@ -232,21 +248,21 @@ class ReducerSagaTest {
         Session s = new Session(Kern.bigClaimState(1100));
         int handle = Kern.handle(FactionHandle.FIRST_NORMAL_ORDINAL);
         // The DisbandFaction step only enqueues the first page.
-        List<Effect> kick = s.step(new Intent.DisbandFaction(handle, true, Kern.player(0)));
+        List<Effect> kick = s.step(new LifecycleIntent.DisbandFaction(handle, true, Kern.player(0)));
         Intent page = continuationOf(kick);
-        assertTrue(page instanceof Intent.DisbandPage);
+        assertTrue(page instanceof LifecycleIntent.DisbandPage);
         // One claim page removes at most PAGE_SIZE chunks and asks for more.
         List<Effect> p = s.step(page);
-        int removed = Kern.countType(p, Effect.ClaimRemoved.class);
+        int removed = Kern.countType(p, ClaimEffect.ClaimRemoved.class);
         assertTrue(removed <= Reducer.PAGE_SIZE, "page removed " + removed);
         assertEquals(Reducer.PAGE_SIZE, removed); // 1100 > 1024 => first page is full
-        assertEquals(1, Kern.countType(p, Effect.ContinuationRequested.class));
+        assertEquals(1, Kern.countType(p, SystemEffect.ContinuationRequested.class));
 
         // A full drive removes everything and frees the ordinal.
         Session full = new Session(Kern.bigClaimState(1100));
-        List<Effect> all = full.apply(new Intent.DisbandFaction(handle, true, Kern.player(0)));
-        assertEquals(1100, Kern.countType(all, Effect.ClaimRemoved.class));
-        assertEquals(1, Kern.countType(all, Effect.FactionDisbanded.class));
+        List<Effect> all = full.apply(new LifecycleIntent.DisbandFaction(handle, true, Kern.player(0)));
+        assertEquals(1100, Kern.countType(all, ClaimEffect.ClaimRemoved.class));
+        assertEquals(1, Kern.countType(all, LifecycleEffect.FactionDisbanded.class));
         assertNull(full.state.factions().resolve(handle));
         assertEquals(0, full.state.claims().size());
     }
@@ -255,8 +271,8 @@ class ReducerSagaTest {
     void unclaimAllIsPagedAndKeepsFaction() {
         Session s = new Session(Kern.bigClaimState(1100));
         int handle = Kern.handle(FactionHandle.FIRST_NORMAL_ORDINAL);
-        List<Effect> all = s.apply(new Intent.UnclaimAll(Kern.player(0), handle));
-        assertEquals(1100, Kern.countType(all, Effect.ClaimRemoved.class));
+        List<Effect> all = s.apply(new ClaimIntent.UnclaimAll(Kern.player(0), handle));
+        assertEquals(1100, Kern.countType(all, ClaimEffect.ClaimRemoved.class));
         assertEquals(0, s.state.factions().resolve(handle).landCount());
         assertEquals(0, s.state.claims().size());
     }
@@ -265,7 +281,7 @@ class ReducerSagaTest {
 
     private static long payoutId(List<Effect> effects) {
         for (Effect e : effects) {
-            if (e instanceof Effect.PayoutRequested p) {
+            if (e instanceof ExternalEffect.PayoutRequested p) {
                 return p.escrowId();
             }
         }
@@ -274,7 +290,7 @@ class ReducerSagaTest {
 
     private static Intent continuationOf(List<Effect> effects) {
         for (Effect e : effects) {
-            if (e instanceof Effect.ContinuationRequested cr) {
+            if (e instanceof SystemEffect.ContinuationRequested cr) {
                 return cr.next();
             }
         }

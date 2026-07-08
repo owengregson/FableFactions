@@ -1,4 +1,4 @@
-package dev.fablemc.factions.kernel.audit;
+package dev.fablemc.factions.kernel.vocab;
 
 /**
  * The 18 audit-log action categories, with the exact reference id strings.

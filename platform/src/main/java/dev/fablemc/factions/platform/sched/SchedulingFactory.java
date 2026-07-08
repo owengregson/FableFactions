@@ -1,6 +1,7 @@
 package dev.fablemc.factions.platform.sched;
 
 import dev.fablemc.factions.platform.probe.Capabilities;
+import dev.fablemc.factions.platform.probe.CompatClass;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,7 +23,7 @@ import org.jetbrains.annotations.NotNull;
 public final class SchedulingFactory {
 
     /** The compat-folia backend, loaded reflectively so plain Paper never links it. */
-    private static final String FOLIA_IMPL = "dev.fablemc.factions.compat.folia.FoliaScheduling";
+    private static final String FOLIA_IMPL = CompatClass.FOLIA_SCHEDULING.fqn();
 
     private SchedulingFactory() {}
 

@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
+import dev.fablemc.factions.platform.probe.CompatClass;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
 import org.jetbrains.annotations.NotNull;
@@ -29,7 +30,7 @@ import org.jetbrains.annotations.Nullable;
 public final class ItemCodec {
 
     /** The compat-modern byte codec, loaded by FQN only behind the serializeAsBytes probe. */
-    private static final String MODERN_IMPL = "dev.fablemc.factions.compat.modern.ModernItemCodec";
+    private static final String MODERN_IMPL = CompatClass.MODERN_ITEM_CODEC.fqn();
 
     private static final String TAG_LEGACY = "FF1";
     private static final String TAG_MODERN = "FF2";

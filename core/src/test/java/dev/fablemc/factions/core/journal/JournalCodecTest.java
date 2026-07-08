@@ -14,18 +14,40 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-import dev.fablemc.factions.kernel.audit.FactionAuditAction;
+import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
+import dev.fablemc.factions.kernel.vocab.Relation;
+import dev.fablemc.factions.kernel.vocab.PowerSource;
+import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
+import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
+import dev.fablemc.factions.kernel.vocab.BroadcastScope;
+import dev.fablemc.factions.kernel.vocab.BankTxType;
+import dev.fablemc.factions.kernel.intent.SystemIntent;
+import dev.fablemc.factions.kernel.effect.TravelEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.SessionEffect;
+import dev.fablemc.factions.kernel.effect.RoleEffect;
+import dev.fablemc.factions.kernel.effect.RelationEffect;
+import dev.fablemc.factions.kernel.effect.PrefEffect;
+import dev.fablemc.factions.kernel.effect.PowerEffect;
+import dev.fablemc.factions.kernel.effect.MembershipEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.ExternalEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.effect.ChestEffect;
+import dev.fablemc.factions.kernel.effect.AuditEffect;
 
 /**
  * The journal-codec contract (work order W2b §3): the tag registry is <b>complete</b> — every
  * journaled {@link Effect} record has a stable tag and every tag decodes — and encode→decode is a
  * byte-exact round trip for a representative of every effect type. The one permitted subtype that
- * is deliberately untagged is the {@link Effect.ContinuationRequested} control effect (AM-5),
+ * is deliberately untagged is the {@link SystemEffect.ContinuationRequested} control effect (AM-5),
  * which the writer strips before the journal ever sees it.
  */
 final class JournalCodecTest {
@@ -37,8 +59,10 @@ final class JournalCodecTest {
     /** Reflect over the sealed hierarchy: every permitted subtype is either tagged or control. */
     @Test
     void everyEffectRecordIsTaggedOrControl() {
-        Class<?>[] permitted = Effect.class.getPermittedSubclasses();
-        assertTrue(permitted != null && permitted.length > 0, "Effect must be sealed with subtypes");
+        // W25-REORG §P1: Effect now permits per-domain sub-interfaces, each permitting the leaf
+        // records — flatten to the leaves before checking tagged-xor-control.
+        Set<Class<?>> permitted = JournalCodec.leafEffectClasses();
+        assertTrue(!permitted.isEmpty(), "Effect must be sealed with subtypes");
 
         Set<Class<? extends Effect>> registered = JournalCodec.registeredEffectClasses();
         Set<Class<? extends Effect>> control = JournalCodec.CONTROL_EFFECTS;
@@ -50,7 +74,7 @@ final class JournalCodecTest {
                     sub.getSimpleName() + " must be exactly one of {tagged, control}");
         }
         // ContinuationRequested is the sole control effect and carries an Intent back to the pipeline.
-        assertEquals(Set.of(Effect.ContinuationRequested.class), control);
+        assertEquals(Set.of(SystemEffect.ContinuationRequested.class), control);
         // The boot completeness gate agrees (no missing/duplicate tags).
         assertDoesNotThrow(JournalCodec::verifyComplete);
     }
@@ -92,76 +116,76 @@ final class JournalCodecTest {
         String[] args = {"a", "b"};
         long[] ids = {1L, 2L, 3L};
         List<Effect> l = new ArrayList<>();
-        l.add(new Effect.FactionCreated(s, ORIGIN, 3, U1, "Alpha"));
-        l.add(new Effect.FactionDisbanded(s, ORIGIN, 3, "Alpha"));
-        l.add(new Effect.FactionRenamed(s, ORIGIN, 3, "Alpha", "Beta"));
-        l.add(new Effect.DescriptionChanged(s, ORIGIN, 3, "desc"));
-        l.add(new Effect.MotdChanged(s, ORIGIN, 3, "motd"));
-        l.add(new Effect.OwnershipTransferred(s, ORIGIN, 3, U1, U2));
-        l.add(new Effect.MergeRequested(s, ORIGIN, 3, 4));
-        l.add(new Effect.MergeCompleted(s, ORIGIN, 3, 4, 5, 6, 12.5));
-        l.add(new Effect.MemberJoined(s, ORIGIN, 3, U1));
-        l.add(new Effect.MemberLeft(s, ORIGIN, 3, U1, true));
-        l.add(new Effect.InviteCreated(s, ORIGIN, 3, U1, 99L));
-        l.add(new Effect.InviteRemoved(s, ORIGIN, 3, U1, Effect.INVITE_REVOKED));
-        l.add(new Effect.RankChanged(s, ORIGIN, 3, U1, 2));
-        l.add(new Effect.RoleCreated(s, ORIGIN, 3, "rid", "Knight", 30));
-        l.add(new Effect.RoleRenamed(s, ORIGIN, 3, "rid", "Knight", "Baron"));
-        l.add(new Effect.RoleRePrioritized(s, ORIGIN, 3, "rid", 40));
-        l.add(new Effect.RolePrefixSet(s, ORIGIN, 3, "rid", "[K]"));
-        l.add(new Effect.RoleDeleted(s, ORIGIN, 3, "rid"));
-        l.add(new Effect.RoleAssigned(s, ORIGIN, 3, U1, "rid"));
-        l.add(new Effect.ClaimSet(s, ORIGIN, 0, 12345L, 3, -1));
-        l.add(new Effect.ClaimRemoved(s, ORIGIN, 0, 12345L, 3));
-        l.add(new Effect.ZoneSet(s, ORIGIN, 0, 1, 999L, -1));
-        l.add(new Effect.ZoneRemoved(s, ORIGIN, 0, 1, 999L));
-        l.add(new Effect.RelationDeclared(s, ORIGIN, 3, 4, 1));
-        l.add(new Effect.RelationEffective(s, ORIGIN, 3, 4, 1, 3));
-        l.add(new Effect.PowerChanged(s, ORIGIN, U1, 5.0, 7.5, 1, "DEATH"));
-        l.add(new Effect.PowerFrozenChanged(s, ORIGIN, U1, true));
-        l.add(new Effect.DeathStreakAdvanced(s, ORIGIN, U1, 3));
-        l.add(new Effect.RaidableChanged(s, ORIGIN, 3, true));
-        l.add(new Effect.BankChanged(s, ORIGIN, 3, -10.0, 90.0, Effect.TX_WITHDRAW, U1, 4, "note"));
-        l.add(new Effect.TaxCharged(s, ORIGIN, 3, 5.0, 85.0));
-        l.add(new Effect.HomeSet(s, ORIGIN, 3));
-        l.add(new Effect.HomeCleared(s, ORIGIN, 3));
-        l.add(new Effect.WarpSet(s, ORIGIN, 3, "base"));
-        l.add(new Effect.WarpDeleted(s, ORIGIN, 3, "base"));
-        l.add(new Effect.WarpPasswordSet(s, ORIGIN, 3, "base", false));
-        l.add(new Effect.WarpCostSet(s, ORIGIN, 3, "base", 25.0));
-        l.add(new Effect.ChestCreated(s, ORIGIN, 3, "vault"));
-        l.add(new Effect.ChestDeleted(s, ORIGIN, 3, "vault"));
-        l.add(new Effect.ChestContentsChanged(s, ORIGIN, 3, "vault", 777L));
-        l.add(new Effect.FlagChanged(s, ORIGIN, 3, 0, true));
-        l.add(new Effect.PrefChanged(s, ORIGIN, U1, 2, true));
-        l.add(new Effect.LocaleChanged(s, ORIGIN, U1, 1));
-        l.add(new Effect.AutoModeChanged(s, ORIGIN, U1, 1));
-        l.add(new Effect.FlyChanged(s, ORIGIN, U1, true));
-        l.add(new Effect.OverrideChanged(s, ORIGIN, U1, true));
-        l.add(new Effect.ShieldChanged(s, ORIGIN, 3, 8, 4));
-        l.add(new Effect.SessionStarted(s, ORIGIN, U1, 111L));
-        l.add(new Effect.SessionEnded(s, ORIGIN, U1, 222L));
-        l.add(new Effect.InboxQueued(s, ORIGIN, U1, key, args));
-        l.add(new Effect.InboxDelivered(s, ORIGIN, U1, ids));
-        l.add(new Effect.AuditRecorded(s, ORIGIN, 3, U1, FactionAuditAction.CLAIM, "detail"));
-        l.add(new Effect.ConfigSwapped(s, ORIGIN, "diff"));
-        l.add(new Effect.Notify(s, ORIGIN, U1, key, args));
-        l.add(new Effect.NotifyFaction(s, ORIGIN, 3, Effect.MEMBERS_ALL, key, args));
-        l.add(new Effect.Broadcast(s, ORIGIN, Effect.SCOPE_SERVER, key, args));
-        l.add(new Effect.Rejected(s, ORIGIN, ReasonCode.BUSY, args));
-        l.add(new Effect.PayoutRequested(s, ORIGIN, 5L, U1, 50.0));
-        l.add(new Effect.EscrowRefund(s, ORIGIN, 5L, U1, 50.0));
-        l.add(new Effect.WgRegionUpsert(s, ORIGIN, 0, 12345L, 3));
-        l.add(new Effect.WgRegionRemove(s, ORIGIN, 0, 12345L));
-        l.add(new Effect.LwcPurgeRequested(s, ORIGIN, 0, 12345L, 4));
+        l.add(new LifecycleEffect.FactionCreated(s, ORIGIN, 3, U1, "Alpha"));
+        l.add(new LifecycleEffect.FactionDisbanded(s, ORIGIN, 3, "Alpha"));
+        l.add(new LifecycleEffect.FactionRenamed(s, ORIGIN, 3, "Alpha", "Beta"));
+        l.add(new LifecycleEffect.DescriptionChanged(s, ORIGIN, 3, "desc"));
+        l.add(new LifecycleEffect.MotdChanged(s, ORIGIN, 3, "motd"));
+        l.add(new LifecycleEffect.OwnershipTransferred(s, ORIGIN, 3, U1, U2));
+        l.add(new LifecycleEffect.MergeRequested(s, ORIGIN, 3, 4));
+        l.add(new LifecycleEffect.MergeCompleted(s, ORIGIN, 3, 4, 5, 6, 12.5));
+        l.add(new MembershipEffect.MemberJoined(s, ORIGIN, 3, U1));
+        l.add(new MembershipEffect.MemberLeft(s, ORIGIN, 3, U1, true));
+        l.add(new MembershipEffect.InviteCreated(s, ORIGIN, 3, U1, 99L));
+        l.add(new MembershipEffect.InviteRemoved(s, ORIGIN, 3, U1, InviteRemovalReason.REVOKED));
+        l.add(new RoleEffect.RankChanged(s, ORIGIN, 3, U1, 2));
+        l.add(new RoleEffect.RoleCreated(s, ORIGIN, 3, "rid", "Knight", 30));
+        l.add(new RoleEffect.RoleRenamed(s, ORIGIN, 3, "rid", "Knight", "Baron"));
+        l.add(new RoleEffect.RoleRePrioritized(s, ORIGIN, 3, "rid", 40));
+        l.add(new RoleEffect.RolePrefixSet(s, ORIGIN, 3, "rid", "[K]"));
+        l.add(new RoleEffect.RoleDeleted(s, ORIGIN, 3, "rid"));
+        l.add(new RoleEffect.RoleAssigned(s, ORIGIN, 3, U1, "rid"));
+        l.add(new ClaimEffect.ClaimSet(s, ORIGIN, 0, 12345L, 3, -1));
+        l.add(new ClaimEffect.ClaimRemoved(s, ORIGIN, 0, 12345L, 3));
+        l.add(new ClaimEffect.ZoneSet(s, ORIGIN, 0, 1, 999L, -1));
+        l.add(new ClaimEffect.ZoneRemoved(s, ORIGIN, 0, 1, 999L));
+        l.add(new RelationEffect.RelationDeclared(s, ORIGIN, 3, 4, Relation.ALLY));
+        l.add(new RelationEffect.RelationEffective(s, ORIGIN, 3, 4, Relation.ALLY, Relation.NEUTRAL));
+        l.add(new PowerEffect.PowerChanged(s, ORIGIN, U1, 5.0, 7.5, PowerSource.REGEN_OFFLINE, "DEATH"));
+        l.add(new PowerEffect.PowerFrozenChanged(s, ORIGIN, U1, true));
+        l.add(new PowerEffect.DeathStreakAdvanced(s, ORIGIN, U1, 3));
+        l.add(new PowerEffect.RaidableChanged(s, ORIGIN, 3, true));
+        l.add(new EconomyEffect.BankChanged(s, ORIGIN, 3, -10.0, 90.0, BankTxType.WITHDRAW, U1, 4, "note"));
+        l.add(new EconomyEffect.TaxCharged(s, ORIGIN, 3, 5.0, 85.0));
+        l.add(new TravelEffect.HomeSet(s, ORIGIN, 3));
+        l.add(new TravelEffect.HomeCleared(s, ORIGIN, 3));
+        l.add(new TravelEffect.WarpSet(s, ORIGIN, 3, "base"));
+        l.add(new TravelEffect.WarpDeleted(s, ORIGIN, 3, "base"));
+        l.add(new TravelEffect.WarpPasswordSet(s, ORIGIN, 3, "base", false));
+        l.add(new TravelEffect.WarpCostSet(s, ORIGIN, 3, "base", 25.0));
+        l.add(new ChestEffect.ChestCreated(s, ORIGIN, 3, "vault"));
+        l.add(new ChestEffect.ChestDeleted(s, ORIGIN, 3, "vault"));
+        l.add(new ChestEffect.ChestContentsChanged(s, ORIGIN, 3, "vault", 777L));
+        l.add(new PrefEffect.FlagChanged(s, ORIGIN, 3, 0, true));
+        l.add(new PrefEffect.PrefChanged(s, ORIGIN, U1, 2, true));
+        l.add(new PrefEffect.LocaleChanged(s, ORIGIN, U1, 1));
+        l.add(new PrefEffect.AutoModeChanged(s, ORIGIN, U1, 1));
+        l.add(new PrefEffect.FlyChanged(s, ORIGIN, U1, true));
+        l.add(new PrefEffect.OverrideChanged(s, ORIGIN, U1, true));
+        l.add(new PrefEffect.ShieldChanged(s, ORIGIN, 3, 8, 4));
+        l.add(new SessionEffect.SessionStarted(s, ORIGIN, U1, 111L));
+        l.add(new SessionEffect.SessionEnded(s, ORIGIN, U1, 222L));
+        l.add(new SessionEffect.InboxQueued(s, ORIGIN, U1, key, args));
+        l.add(new SessionEffect.InboxDelivered(s, ORIGIN, U1, ids));
+        l.add(new AuditEffect.AuditRecorded(s, ORIGIN, 3, U1, FactionAuditAction.CLAIM, "detail"));
+        l.add(new SystemEffect.ConfigSwapped(s, ORIGIN, "diff"));
+        l.add(new FeedbackEffect.Notify(s, ORIGIN, U1, key, args));
+        l.add(new FeedbackEffect.NotifyFaction(s, ORIGIN, 3, NotifyPredicate.MEMBERS_ALL, key, args));
+        l.add(new FeedbackEffect.Broadcast(s, ORIGIN, BroadcastScope.SERVER, key, args));
+        l.add(new FeedbackEffect.Rejected(s, ORIGIN, ReasonCode.BUSY, args));
+        l.add(new ExternalEffect.PayoutRequested(s, ORIGIN, 5L, U1, 50.0));
+        l.add(new ExternalEffect.EscrowRefund(s, ORIGIN, 5L, U1, 50.0));
+        l.add(new ExternalEffect.WgRegionUpsert(s, ORIGIN, 0, 12345L, 3));
+        l.add(new ExternalEffect.WgRegionRemove(s, ORIGIN, 0, 12345L));
+        l.add(new ExternalEffect.LwcPurgeRequested(s, ORIGIN, 0, 12345L, 4));
         return l;
     }
 
     /** Guards that the control effect really is unencodable (it must never reach the journal). */
     @Test
     void continuationRequestedHasNoTag() {
-        Effect control = new Effect.ContinuationRequested(1L, ORIGIN, new Intent.RetagPage(0));
+        Effect control = new SystemEffect.ContinuationRequested(1L, ORIGIN, new SystemIntent.RetagPage(0));
         assertTrue(JournalCodec.CONTROL_EFFECTS.contains(control.getClass()));
-        assertFalse(JournalCodec.registeredEffectClasses().contains(Effect.ContinuationRequested.class));
+        assertFalse(JournalCodec.registeredEffectClasses().contains(SystemEffect.ContinuationRequested.class));
     }
 }

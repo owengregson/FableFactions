@@ -18,6 +18,8 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Reducer;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
 
 /**
  * The single {@code fable-kernel} writer (proposal-C §3.2, AM-9). It parks until signalled,
@@ -25,7 +27,7 @@ import dev.fablemc.factions.kernel.state.KernelState;
  * publishes exactly one snapshot per batch, then hands the ordered effect batch to the journal
  * sink and the fanout sink in that order.
  *
- * <p>Paged continuations (AM-5): a reducer step may emit an {@link Effect.ContinuationRequested}
+ * <p>Paged continuations (AM-5): a reducer step may emit an {@link SystemEffect.ContinuationRequested}
  * carrying the next page's {@link Intent}. That control effect is <b>not</b> a domain effect — it
  * is stripped from the batch before journaling/fanout, and its intent is re-enqueued on the
  * system lane <em>after</em> the intermediate snapshot is published, so interleaved intents
@@ -158,7 +160,7 @@ public final class WriterThread {
                     raw.rngSeed(), raw.origin(), raw.intent());
             Class<?> type = env.intent().getClass();
             if (isTripped(type, now)) {
-                effects.add(new Effect.Rejected(seq, env.origin(), ReasonCode.BUSY, argsOf(type)));
+                effects.add(new FeedbackEffect.Rejected(seq, env.origin(), ReasonCode.BUSY, argsOf(type)));
                 continue;
             }
             try {
@@ -168,7 +170,7 @@ public final class WriterThread {
                 if (produced != null && !produced.isEmpty()) {
                     for (int j = 0; j < produced.size(); j++) {
                         Effect effect = produced.get(j);
-                        if (effect instanceof Effect.ContinuationRequested cr) {
+                        if (effect instanceof SystemEffect.ContinuationRequested cr) {
                             // AM-5 paged-continuation control: NOT a domain effect — never journaled
                             // or fanned out. Re-enqueue its intent on the system lane after publish.
                             if (continuations == null) {
@@ -186,7 +188,7 @@ public final class WriterThread {
                         "reduce failed for intent " + type.getName() + " (seq " + seq + ")",
                         reducerBug);
                 recordFailure(type, now);
-                effects.add(new Effect.Rejected(seq, env.origin(), ReasonCode.INTERNAL_ERROR,
+                effects.add(new FeedbackEffect.Rejected(seq, env.origin(), ReasonCode.INTERNAL_ERROR,
                         argsOf(type)));
             }
         }

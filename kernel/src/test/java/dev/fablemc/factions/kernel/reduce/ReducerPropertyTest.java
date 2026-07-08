@@ -22,6 +22,20 @@ import dev.fablemc.factions.kernel.rules.FactionAggregates;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.FactionArena;
 import dev.fablemc.factions.kernel.state.KernelState;
+import dev.fablemc.factions.kernel.vocab.Relation;
+import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
+import dev.fablemc.factions.kernel.vocab.ClaimMode;
+import dev.fablemc.factions.kernel.intent.TravelIntent;
+import dev.fablemc.factions.kernel.intent.SessionIntent;
+import dev.fablemc.factions.kernel.intent.RoleIntent;
+import dev.fablemc.factions.kernel.intent.RelationIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.MembershipIntent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.ChestIntent;
 
 /**
  * jqwik property suite over random intent sequences applied through {@link Reducer#apply} and
@@ -81,7 +95,7 @@ class ReducerPropertyTest {
             }
         }
         // after a tick, raidable is exactly (land > maxLand); land cap otherwise holds
-        s.apply(new Intent.PowerTick(0));
+        s.apply(new PowerIntent.PowerTick(0));
         arena = s.state.factions();
         for (int ord = 0; ord < arena.highWater(); ord++) {
             Faction f = arena.at(ord);
@@ -106,30 +120,30 @@ class ReducerPropertyTest {
         int[] h = new int[3];
         for (int i = 0; i < 3; i++) {
             h[i] = s.createFaction("Bank" + i, Kern.player(i));
-            s.apply(new Intent.CreditBank(h[i], 100.0, Kern.player(i), i + 1));
+            s.apply(new EconomyIntent.CreditBank(h[i], 100.0, Kern.player(i), i + 1));
         }
         double initial = Kern.custody(s.state);
         double walletOut = 0.0;
         for (int i = 0; i < 90; i++) {
             switch (r.nextInt(3)) {
-                case 0 -> s.apply(new Intent.RequestBankWithdrawal(h[r.nextInt(3)],
+                case 0 -> s.apply(new EconomyIntent.RequestBankWithdrawal(h[r.nextInt(3)],
                         1 + r.nextInt(20), Kern.player(0)));
                 case 1 -> {
                     long[] open = Kern.openEscrowIds(s.state);
                     if (open.length > 0) {
                         long id = open[r.nextInt(open.length)];
-                        int outcome = r.nextInt(2);
-                        if (outcome == Intent.ESCROW_OK) {
+                        EscrowOutcome outcome = EscrowOutcome.fromCode(r.nextInt(2));
+                        if (outcome == EscrowOutcome.OK) {
                             walletOut += s.state.escrows().byId(id).amount(); // delivered to wallet
                         }
-                        s.apply(new Intent.SettleEscrow(id, outcome));
+                        s.apply(new EconomyIntent.SettleEscrow(id, outcome));
                     }
                 }
                 default -> {
                     int from = r.nextInt(3);
                     int to = r.nextInt(3);
                     if (from != to) {
-                        s.apply(new Intent.TransferBank(h[from], h[to], 1 + r.nextInt(20),
+                        s.apply(new EconomyIntent.TransferBank(h[from], h[to], 1 + r.nextInt(20),
                                 Kern.player(0)));
                     }
                 }
@@ -177,7 +191,7 @@ class ReducerPropertyTest {
         assertTrue(tf != null); // stable mutations never disband
         int ord = FactionHandle.ordinal(target);
         String folded = tf.nameFolded();
-        s.apply(new Intent.DisbandFaction(target, true, Kern.player(0)));
+        s.apply(new LifecycleIntent.DisbandFaction(target, true, Kern.player(0)));
         assertNull(s.state.factions().resolve(target), "faction not freed");
         String dangling = Kern.danglingRefs(s.state, ord, folded);
         assertEquals("", dangling, "dangling after disband (seed=" + seed + "): " + dangling);
@@ -195,14 +209,14 @@ class ReducerPropertyTest {
             s.setPower(Kern.player(i), 8.0);
         }
         // P4 -> F0, P5 -> F1 (open join)
-        s.apply(new Intent.SetFactionFlag(h[0], Faction.FLAG_OPEN, true, false, Kern.player(0)));
-        s.apply(new Intent.JoinFaction(h[0], Kern.player(4), Intent.OPEN_JOIN));
-        s.apply(new Intent.SetFactionFlag(h[1], Faction.FLAG_OPEN, true, false, Kern.player(1)));
-        s.apply(new Intent.JoinFaction(h[1], Kern.player(5), Intent.OPEN_JOIN));
-        s.apply(new Intent.ClaimChunks(Kern.player(0), h[0], 0,
-                new long[] {ChunkKeys.key(0, 0)}, 0));
-        s.apply(new Intent.ClaimChunks(Kern.player(1), h[1], 0,
-                new long[] {ChunkKeys.key(-2, -2)}, 0));
+        s.apply(new PrefIntent.SetFactionFlag(h[0], Faction.FLAG_OPEN, true, false, Kern.player(0)));
+        s.apply(new MembershipIntent.JoinFaction(h[0], Kern.player(4), MembershipIntent.OPEN_JOIN));
+        s.apply(new PrefIntent.SetFactionFlag(h[1], Faction.FLAG_OPEN, true, false, Kern.player(1)));
+        s.apply(new MembershipIntent.JoinFaction(h[1], Kern.player(5), MembershipIntent.OPEN_JOIN));
+        s.apply(new ClaimIntent.ClaimChunks(Kern.player(0), h[0], 0,
+                new long[] {ChunkKeys.key(0, 0)}, ClaimMode.SINGLE));
+        s.apply(new ClaimIntent.ClaimChunks(Kern.player(1), h[1], 0,
+                new long[] {ChunkKeys.key(-2, -2)}, ClaimMode.SINGLE));
         return h;
     }
 
@@ -272,53 +286,55 @@ class ReducerPropertyTest {
     private static Intent gen(SplittableRandom r, int[] h, UUID[] p, boolean life) {
         int n = life ? 36 : 31;
         switch (r.nextInt(n)) {
-            case 0: return new Intent.ClaimChunks(pickP(r, p), pickH(r, h), 0, smallKeys(r), 0);
-            case 1: return new Intent.UnclaimChunks(pickP(r, p), pickH(r, h), 0, smallKeys(r));
-            case 2: return new Intent.AdminClaimChunks(pickH(r, h), 0, smallKeys(r), pickP(r, p));
-            case 3: return new Intent.AdminUnclaimChunks(pickH(r, h), 0, smallKeys(r), pickP(r, p));
-            case 4: return new Intent.SetZoneChunks(r.nextInt(2), 0, zoneKeys(r), pickP(r, p));
-            case 5: return new Intent.RemoveZoneChunk(r.nextInt(2), 0, key(r), pickP(r, p));
-            case 6: return new Intent.DeclareRelation(pickH(r, h), pickH(r, h), 1 + r.nextInt(4),
-                    pickP(r, p));
-            case 7: return new Intent.RecordDeath(pickP(r, p), r.nextBoolean() ? pickP(r, p) : null,
+            case 0: return new ClaimIntent.ClaimChunks(pickP(r, p), pickH(r, h), 0, smallKeys(r),
+                    ClaimMode.SINGLE);
+            case 1: return new ClaimIntent.UnclaimChunks(pickP(r, p), pickH(r, h), 0, smallKeys(r));
+            case 2: return new ClaimIntent.AdminClaimChunks(pickH(r, h), 0, smallKeys(r), pickP(r, p));
+            case 3: return new ClaimIntent.AdminUnclaimChunks(pickH(r, h), 0, smallKeys(r), pickP(r, p));
+            case 4: return new ClaimIntent.SetZoneChunks(r.nextInt(2), 0, zoneKeys(r), pickP(r, p));
+            case 5: return new ClaimIntent.RemoveZoneChunk(r.nextInt(2), 0, key(r), pickP(r, p));
+            case 6: return new RelationIntent.DeclareRelation(pickH(r, h), pickH(r, h),
+                    Relation.fromCode((byte) (1 + r.nextInt(4))), pickP(r, p));
+            case 7: return new PowerIntent.RecordDeath(pickP(r, p), r.nextBoolean() ? pickP(r, p) : null,
                     0, key(r));
-            case 8: return new Intent.PowerTick(r.nextInt(5));
-            case 9: return new Intent.AdminPowerSet(pickP(r, p), r.nextInt(15), pickP(r, p), "x");
-            case 10: return new Intent.AdminPowerAdd(pickP(r, p), r.nextInt(8), pickP(r, p), "x");
-            case 11: return new Intent.AdminPowerRemove(pickP(r, p), r.nextInt(8), pickP(r, p), "x");
-            case 12: return new Intent.SetPowerFrozen(pickP(r, p), r.nextBoolean(), pickP(r, p), "x");
-            case 13: return new Intent.CreditBank(pickH(r, h), r.nextInt(50), pickP(r, p), r.nextLong());
-            case 14: return new Intent.RequestBankWithdrawal(pickH(r, h), r.nextInt(30) - 5,
+            case 8: return new PowerIntent.PowerTick(r.nextInt(5));
+            case 9: return new PowerIntent.AdminPowerSet(pickP(r, p), r.nextInt(15), pickP(r, p), "x");
+            case 10: return new PowerIntent.AdminPowerAdd(pickP(r, p), r.nextInt(8), pickP(r, p), "x");
+            case 11: return new PowerIntent.AdminPowerRemove(pickP(r, p), r.nextInt(8), pickP(r, p), "x");
+            case 12: return new PowerIntent.SetPowerFrozen(pickP(r, p), r.nextBoolean(), pickP(r, p), "x");
+            case 13: return new EconomyIntent.CreditBank(pickH(r, h), r.nextInt(50), pickP(r, p), r.nextLong());
+            case 14: return new EconomyIntent.RequestBankWithdrawal(pickH(r, h), r.nextInt(30) - 5,
                     pickP(r, p));
-            case 15: return new Intent.SettleEscrow(1 + r.nextInt(60), r.nextInt(2));
-            case 16: return new Intent.TransferBank(pickH(r, h), pickH(r, h), r.nextInt(30) - 5,
+            case 15: return new EconomyIntent.SettleEscrow(1 + r.nextInt(60),
+                    EscrowOutcome.fromCode(r.nextInt(2)));
+            case 16: return new EconomyIntent.TransferBank(pickH(r, h), pickH(r, h), r.nextInt(30) - 5,
                     pickP(r, p));
-            case 17: return new Intent.TaxSweep(r.nextInt(5));
-            case 18: return new Intent.SendInvite(pickH(r, h), pickP(r, p), pickP(r, p));
-            case 19: return new Intent.RevokeInvite(pickH(r, h), pickP(r, p), pickP(r, p));
-            case 20: return new Intent.JoinFaction(pickH(r, h), pickP(r, p),
-                    r.nextBoolean() ? Intent.OPEN_JOIN : 1 + r.nextInt(40));
-            case 21: return new Intent.LeaveFaction(pickH(r, h), pickP(r, p));
-            case 22: return new Intent.KickMember(pickH(r, h), pickP(r, p), pickP(r, p));
-            case 23: return new Intent.PromoteMember(pickH(r, h), pickP(r, p), pickP(r, p));
-            case 24: return new Intent.DemoteMember(pickH(r, h), pickP(r, p), pickP(r, p));
-            case 25: return new Intent.SetFactionFlag(pickH(r, h), r.nextInt(6), r.nextBoolean(),
+            case 17: return new EconomyIntent.TaxSweep(r.nextInt(5));
+            case 18: return new MembershipIntent.SendInvite(pickH(r, h), pickP(r, p), pickP(r, p));
+            case 19: return new MembershipIntent.RevokeInvite(pickH(r, h), pickP(r, p), pickP(r, p));
+            case 20: return new MembershipIntent.JoinFaction(pickH(r, h), pickP(r, p),
+                    r.nextBoolean() ? MembershipIntent.OPEN_JOIN : 1 + r.nextInt(40));
+            case 21: return new MembershipIntent.LeaveFaction(pickH(r, h), pickP(r, p));
+            case 22: return new MembershipIntent.KickMember(pickH(r, h), pickP(r, p), pickP(r, p));
+            case 23: return new RoleIntent.PromoteMember(pickH(r, h), pickP(r, p), pickP(r, p));
+            case 24: return new RoleIntent.DemoteMember(pickH(r, h), pickP(r, p), pickP(r, p));
+            case 25: return new PrefIntent.SetFactionFlag(pickH(r, h), r.nextInt(6), r.nextBoolean(),
                     r.nextBoolean(), pickP(r, p));
-            case 26: return new Intent.SetHome(pickH(r, h), 0, 1, 2, 3, 0, 0, pickP(r, p));
-            case 27: return new Intent.SetWarp(pickH(r, h), "w" + r.nextInt(3), 0, 1, 2, 3, 0, 0,
+            case 26: return new TravelIntent.SetHome(pickH(r, h), 0, 1, 2, 3, 0, 0, pickP(r, p));
+            case 27: return new TravelIntent.SetWarp(pickH(r, h), "w" + r.nextInt(3), 0, 1, 2, 3, 0, 0,
                     pickP(r, p));
-            case 28: return new Intent.CreateChest(pickH(r, h), "c" + r.nextInt(3), pickP(r, p));
+            case 28: return new ChestIntent.CreateChest(pickH(r, h), "c" + r.nextInt(3), pickP(r, p));
             case 29: return r.nextBoolean()
-                    ? new Intent.PlayerConnected(pickP(r, p), "N", "en")
-                    : new Intent.PlayerDisconnected(pickP(r, p));
-            case 30: return new Intent.UnclaimAll(pickP(r, p), pickH(r, h));
+                    ? new SessionIntent.PlayerConnected(pickP(r, p), "N", "en")
+                    : new SessionIntent.PlayerDisconnected(pickP(r, p));
+            case 30: return new ClaimIntent.UnclaimAll(pickP(r, p), pickH(r, h));
             // ── lifecycle (broad menu only) ──
-            case 31: return new Intent.CreateFaction("Rnd" + r.nextInt(1_000_000), pickP(r, p));
-            case 32: return new Intent.DisbandFaction(pickH(r, h), true, pickP(r, p));
-            case 33: return new Intent.RenameFaction(pickH(r, h), "Ren" + r.nextInt(1_000_000),
+            case 31: return new LifecycleIntent.CreateFaction("Rnd" + r.nextInt(1_000_000), pickP(r, p));
+            case 32: return new LifecycleIntent.DisbandFaction(pickH(r, h), true, pickP(r, p));
+            case 33: return new LifecycleIntent.RenameFaction(pickH(r, h), "Ren" + r.nextInt(1_000_000),
                     pickP(r, p));
-            case 34: return new Intent.SendMergeRequest(pickH(r, h), pickH(r, h), pickP(r, p));
-            default: return new Intent.AcceptMergeRequest(pickH(r, h), pickH(r, h), pickP(r, p));
+            case 34: return new LifecycleIntent.SendMergeRequest(pickH(r, h), pickH(r, h), pickP(r, p));
+            default: return new LifecycleIntent.AcceptMergeRequest(pickH(r, h), pickH(r, h), pickP(r, p));
         }
     }
 }

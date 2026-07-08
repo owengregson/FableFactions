@@ -50,28 +50,28 @@ public record Capabilities(
         boolean clickedInventory) {
 
     public static @NotNull Capabilities detect() {
-        boolean folia = Probes.classPresent("io.papermc.paper.threadedregions.RegionizedServer");
+        boolean folia = Probes.classPresent(ProbeTarget.FOLIA_REGIONIZED_SERVER.className());
         // Report-only (AM-12): also true on plain Paper 1.20+, so NEVER a Folia selector.
         boolean foliaSchedulers =
-                folia || Probes.classPresent("io.papermc.paper.threadedregions.scheduler.EntityScheduler");
+                folia || Probes.classPresent(ProbeTarget.FOLIA_ENTITY_SCHEDULER.className());
         // Bungee BaseComponent (+ its Player.Spigot#sendMessage sink) — the 1.8+ hover/click path.
-        boolean bungeeChat = Probes.classPresent("net.md_5.bungee.api.chat.BaseComponent");
+        boolean bungeeChat = Probes.classPresent(ProbeTarget.BUNGEE_BASE_COMPONENT.className());
         // The 1.7.10 binary split: getOnlinePlayers() returns Collection (1.8+) vs Player[] (stock 1.7.10).
         boolean onlineCollection = onlineReturnsCollection();
         boolean flattened = Material.getMaterial("WHITE_WOOL") != null;
         boolean asyncTeleport = Probes.methodPresent("org.bukkit.entity.Entity", "teleportAsync", "org.bukkit.Location");
         boolean asyncChunkGet = anyMethodNamed(World.class, "getChunkAtAsync");
-        boolean modernChatEvent = Probes.classPresent("io.papermc.paper.event.player.AsyncChatEvent");
-        boolean blockExplode = Probes.classPresent("org.bukkit.event.block.BlockExplodeEvent");
-        boolean entityPickup = Probes.classPresent("org.bukkit.event.entity.EntityPickupItemEvent");
-        boolean armorStands = Probes.classPresent("org.bukkit.entity.ArmorStand");
-        boolean raids = Probes.classPresent("org.bukkit.Raid");
-        boolean mountBukkit = Probes.classPresent("org.bukkit.event.entity.EntityMountEvent");
-        boolean mountSpigot = Probes.classPresent("org.spigotmc.event.entity.EntityMountEvent");
-        boolean toggleGlide = Probes.classPresent("org.bukkit.event.entity.EntityToggleGlideEvent");
-        boolean lingering = Probes.classPresent("org.bukkit.event.entity.LingeringPotionSplashEvent");
-        boolean pdc = Probes.classPresent("org.bukkit.persistence.PersistentDataContainer");
-        boolean brigadier = Probes.classPresent("io.papermc.paper.command.brigadier.Commands");
+        boolean modernChatEvent = Probes.classPresent(ProbeTarget.ASYNC_CHAT_EVENT.className());
+        boolean blockExplode = Probes.classPresent(ProbeTarget.BLOCK_EXPLODE_EVENT.className());
+        boolean entityPickup = Probes.classPresent(ProbeTarget.ENTITY_PICKUP_ITEM_EVENT.className());
+        boolean armorStands = Probes.classPresent(ProbeTarget.ARMOR_STAND.className());
+        boolean raids = Probes.classPresent(ProbeTarget.RAID.className());
+        boolean mountBukkit = Probes.classPresent(ProbeTarget.ENTITY_MOUNT_EVENT_BUKKIT.className());
+        boolean mountSpigot = Probes.classPresent(ProbeTarget.ENTITY_MOUNT_EVENT_SPIGOT.className());
+        boolean toggleGlide = Probes.classPresent(ProbeTarget.ENTITY_TOGGLE_GLIDE_EVENT.className());
+        boolean lingering = Probes.classPresent(ProbeTarget.LINGERING_POTION_SPLASH_EVENT.className());
+        boolean pdc = Probes.classPresent(ProbeTarget.PERSISTENT_DATA_CONTAINER.className());
+        boolean brigadier = Probes.classPresent(ProbeTarget.BRIGADIER_COMMANDS.className());
         boolean serializeAsBytes = Probes.methodPresent(ItemStack.class, "serializeAsBytes");
         // Spigot bungee ChatColor.of(String) — the 1.16 hex-colour marker (§x hex support).
         boolean hexColors = Probes.methodPresent("net.md_5.bungee.api.ChatColor", "of", "java.lang.String");

@@ -18,6 +18,7 @@ import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 
+import dev.fablemc.factions.core.storage.legacy.PvpIndexImporter;
 import dev.fablemc.factions.kernel.config.ConfigImage;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;

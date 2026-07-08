@@ -2,6 +2,7 @@ package dev.fablemc.factions.kernel.rules;
 
 import dev.fablemc.factions.kernel.config.BakedTables;
 import dev.fablemc.factions.kernel.config.PowerConfig;
+import dev.fablemc.factions.kernel.vocab.PowerSource;
 
 /**
  * The power pipeline: transcription of the reference {@code PowerServiceImpl.apply} plus the
@@ -23,17 +24,6 @@ public final class PowerMath {
     private PowerMath() {
     }
 
-    // ── Source ordinals (Effect.PowerChanged#source) ─────────────────────────────────────
-    public static final int SRC_REGEN_ONLINE = 0;
-    public static final int SRC_REGEN_OFFLINE = 1;
-    public static final int SRC_DEATH = 2;
-    public static final int SRC_KILL = 3;
-    public static final int SRC_BUY = 4;
-    public static final int SRC_ADMIN_SET = 5;
-    public static final int SRC_ADMIN_ADD = 6;
-    public static final int SRC_ADMIN_REMOVE = 7;
-    public static final int SRC_ADMIN_RESET = 8;
-
     // ── ZoneContext ordinals (BakedTables.zonePowerMultipliers index) ────────────────────
     public static final int ZONE_SAFEZONE = 0;
     public static final int ZONE_WARZONE = 1;
@@ -43,31 +33,6 @@ public final class PowerMath {
 
     /** The no-change epsilon: an effective delta smaller than this is dropped (reference 1e-5). */
     public static final double NO_CHANGE_EPSILON = 0.00001;
-
-    /** Uppercase reference source name for the reason code / power-history row. */
-    public static String sourceName(int source) {
-        switch (source) {
-            case SRC_REGEN_ONLINE: return "REGEN_ONLINE";
-            case SRC_REGEN_OFFLINE: return "REGEN_OFFLINE";
-            case SRC_DEATH: return "DEATH";
-            case SRC_KILL: return "KILL";
-            case SRC_BUY: return "BUY";
-            case SRC_ADMIN_SET: return "ADMIN_SET";
-            case SRC_ADMIN_ADD: return "ADMIN_ADD";
-            case SRC_ADMIN_REMOVE: return "ADMIN_REMOVE";
-            case SRC_ADMIN_RESET: return "ADMIN_RESET";
-            default: return "UNKNOWN";
-        }
-    }
-
-    private static boolean isAdmin(int source) {
-        return source >= SRC_ADMIN_SET;
-    }
-
-    private static boolean isAutomatic(int source) {
-        return source == SRC_REGEN_ONLINE || source == SRC_REGEN_OFFLINE
-                || source == SRC_DEATH || source == SRC_KILL;
-    }
 
     /** Clamps {@code v} into {@code [min, max]}. */
     public static double clamp(double v, double min, double max) {
@@ -81,11 +46,11 @@ public final class PowerMath {
     }
 
     /** {@code true} when the freeze flag blocks {@code source}. */
-    public static boolean sourceAffectedByFreeze(PowerConfig pc, int source) {
-        if (isAdmin(source)) {
+    public static boolean sourceAffectedByFreeze(PowerConfig pc, PowerSource source) {
+        if (source.isAdmin()) {
             return false;
         }
-        if (source == SRC_REGEN_ONLINE || source == SRC_REGEN_OFFLINE) {
+        if (source == PowerSource.REGEN_ONLINE || source == PowerSource.REGEN_OFFLINE) {
             return pc.freezeBlocksRegen();
         }
         // DEATH / KILL / BUY
@@ -93,13 +58,13 @@ public final class PowerMath {
     }
 
     /** {@code true} when {@code source} is enabled by config. */
-    public static boolean sourceEnabled(PowerConfig pc, int source) {
+    public static boolean sourceEnabled(PowerConfig pc, PowerSource source) {
         switch (source) {
-            case SRC_REGEN_ONLINE: return pc.sourceRegenOnlineEnabled();
-            case SRC_REGEN_OFFLINE: return pc.sourceRegenOfflineEnabled();
-            case SRC_DEATH: return pc.sourceDeathLossEnabled();
-            case SRC_KILL: return pc.sourceKillGainEnabled();
-            case SRC_BUY: return pc.buyEnabled() && pc.sourceBuyEnabled();
+            case REGEN_ONLINE: return pc.sourceRegenOnlineEnabled();
+            case REGEN_OFFLINE: return pc.sourceRegenOfflineEnabled();
+            case DEATH: return pc.sourceDeathLossEnabled();
+            case KILL: return pc.sourceKillGainEnabled();
+            case BUY: return pc.buyEnabled() && pc.sourceBuyEnabled();
             default: return true; // ADMIN_*
         }
     }
@@ -109,12 +74,12 @@ public final class PowerMath {
      * apply the configured amount; DEATH is {@code -abs(baseDelta)}, KILL is {@code +abs(baseDelta)}
      * (the streak-scaled loss / scaled gain the caller computed); BUY/ADMIN pass {@code baseDelta}.
      */
-    public static double sourceAmount(PowerConfig pc, int source, double baseDelta) {
+    public static double sourceAmount(PowerConfig pc, PowerSource source, double baseDelta) {
         switch (source) {
-            case SRC_REGEN_ONLINE: return pc.sourceRegenOnlineAmount();
-            case SRC_REGEN_OFFLINE: return pc.sourceRegenOfflineAmount();
-            case SRC_DEATH: return -Math.abs(baseDelta);
-            case SRC_KILL: return Math.abs(baseDelta);
+            case REGEN_ONLINE: return pc.sourceRegenOnlineAmount();
+            case REGEN_OFFLINE: return pc.sourceRegenOfflineAmount();
+            case DEATH: return -Math.abs(baseDelta);
+            case KILL: return Math.abs(baseDelta);
             default: return baseDelta; // BUY / ADMIN_*
         }
     }
@@ -128,8 +93,8 @@ public final class PowerMath {
      * Per-event clamp, gated to automatic sources only (D-2). Returns {@code delta} unchanged when
      * the source is BUY/ADMIN or {@code maxChangePerEvent <= 0}.
      */
-    public static double applyEventClamp(PowerConfig pc, int source, double delta) {
-        if (!isAutomatic(source)) {
+    public static double applyEventClamp(PowerConfig pc, PowerSource source, double delta) {
+        if (!source.isAutomatic()) {
             return delta;
         }
         double maxAbs = pc.maxChangePerEvent();
@@ -149,7 +114,7 @@ public final class PowerMath {
      * bookkeeping. Never mutates; the reducer stores {@link PowerResult#after()} as the new base.
      */
     public static PowerResult apply(PowerConfig pc, BakedTables baked, double before,
-                                    boolean frozen, int source, double baseDelta,
+                                    boolean frozen, PowerSource source, double baseDelta,
                                     boolean bypassFreeze, int worldIdx, int zoneCtx,
                                     String reason) {
         if (!bypassFreeze && frozen && sourceAffectedByFreeze(pc, source)) {
@@ -159,7 +124,7 @@ public final class PowerMath {
             return new PowerResult(false, false, before, before, 0.0, "SOURCE_DISABLED");
         }
         double delta = sourceAmount(pc, source, baseDelta);
-        if (source == SRC_DEATH || source == SRC_KILL) {
+        if (source == PowerSource.DEATH || source == PowerSource.KILL) {
             delta = applyMultipliers(baked, delta, worldIdx, zoneCtx);
         }
         delta = applyEventClamp(pc, source, delta);
@@ -169,7 +134,7 @@ public final class PowerMath {
             return new PowerResult(false, false, before, before, 0.0, "NO_CHANGE");
         }
         String reasonCode = (reason != null && !reason.trim().isEmpty())
-                ? reason.trim() : sourceName(source);
+                ? reason.trim() : source.sourceName();
         return new PowerResult(true, false, before, after, eff, reasonCode);
     }
 

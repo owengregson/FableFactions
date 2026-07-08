@@ -22,6 +22,9 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.vocab.BankTxType;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
 
 /**
  * MySQL projection parity, gated behind {@code FABLE_MYSQL_TEST=1} and default-skipped (work order
@@ -107,8 +110,8 @@ final class MySqlProjectionTest {
         int handle = FactionHandle.handle(0, FactionHandle.FIRST_NORMAL_ORDINAL);
 
         List<Effect> batch = new ArrayList<>();
-        batch.add(new Effect.FactionCreated(1L, origin, handle, factionId, "Alpha"));
-        batch.add(new Effect.BankChanged(2L, origin, handle, 50.0, 50.0, Effect.TX_DEPOSIT,
+        batch.add(new LifecycleEffect.FactionCreated(1L, origin, handle, factionId, "Alpha"));
+        batch.add(new EconomyEffect.BankChanged(2L, origin, handle, 50.0, 50.0, BankTxType.DEPOSIT,
                 origin.actor(), FactionHandle.WILDERNESS, "deposit"));
         projector.accept(batch, 2L);
         assertEquals(2, projector.drainAndFlush());

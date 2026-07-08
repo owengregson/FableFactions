@@ -13,6 +13,8 @@ import java.util.function.LongSupplier;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 
 /**
  * The MPSC intent queue feeding the single writer (proposal-C §3.2, §3.5). Two lanes:
@@ -93,10 +95,10 @@ public final class IntentBus {
     /** Submits a system intent onto the unbounded lane (never rejected); ticks are coalesced. */
     public void submitSystem(Intent intent) {
         Objects.requireNonNull(intent, "intent");
-        if (intent instanceof Intent.PowerTick pt) {
+        if (intent instanceof PowerIntent.PowerTick pt) {
             coalesce(pendingPowerTick, POWER_TOKEN,
                     envelope(Origin.SYSTEM_ORIGIN, intent), pt.tick());
-        } else if (intent instanceof Intent.TaxSweep ts) {
+        } else if (intent instanceof EconomyIntent.TaxSweep ts) {
             coalesce(pendingTaxSweep, TAX_TOKEN,
                     envelope(Origin.SYSTEM_ORIGIN, intent), ts.tick());
         } else {
@@ -187,10 +189,10 @@ public final class IntentBus {
 
     private static int tickOf(IntentEnvelope env) {
         Intent i = env.intent();
-        if (i instanceof Intent.PowerTick pt) {
+        if (i instanceof PowerIntent.PowerTick pt) {
             return pt.tick();
         }
-        if (i instanceof Intent.TaxSweep ts) {
+        if (i instanceof EconomyIntent.TaxSweep ts) {
             return ts.tick();
         }
         return Integer.MIN_VALUE;

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
 
 /**
  * The write-ahead journal's crash-safety contract (work order W2b §3): a truncated tail replays
@@ -29,7 +30,7 @@ final class EffectJournalTest {
     private static final Origin ORIGIN = Origin.player(new UUID(1, 1));
 
     private static Effect sample(long seq) {
-        return new Effect.FactionCreated(seq, ORIGIN, (int) seq, new UUID(seq, seq), "Faction" + seq);
+        return new LifecycleEffect.FactionCreated(seq, ORIGIN, (int) seq, new UUID(seq, seq), "Faction" + seq);
     }
 
     private static List<Long> replaySeqs(Path dir, JournalReplay.ReplayResult[] out) {

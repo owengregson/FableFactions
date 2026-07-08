@@ -38,6 +38,7 @@ import dev.fablemc.factions.kernel.state.PlayerLedger;
 import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.RelationEdges;
 import dev.fablemc.factions.kernel.state.RelationKind;
+import dev.fablemc.factions.kernel.vocab.PowerSource;
 
 /**
  * Hand-computed pins for every formula named in the W2a research ground truth
@@ -125,15 +126,15 @@ class FormulaPinTest {
     @Test
     void eventClampAutomaticOnly() {
         PowerConfig pc = Kern.pcEventClamp(2.0);
-        assertEquals(-2.0, PowerMath.applyEventClamp(pc, PowerMath.SRC_DEATH, -5.0), EPS);
-        assertEquals(2.0, PowerMath.applyEventClamp(pc, PowerMath.SRC_REGEN_ONLINE, 5.0), EPS);
-        assertEquals(2.0, PowerMath.applyEventClamp(pc, PowerMath.SRC_KILL, 9.0), EPS);
+        assertEquals(-2.0, PowerMath.applyEventClamp(pc, PowerSource.DEATH, -5.0), EPS);
+        assertEquals(2.0, PowerMath.applyEventClamp(pc, PowerSource.REGEN_ONLINE, 5.0), EPS);
+        assertEquals(2.0, PowerMath.applyEventClamp(pc, PowerSource.KILL, 9.0), EPS);
         // Non-automatic sources are never clamped.
-        assertEquals(-5.0, PowerMath.applyEventClamp(pc, PowerMath.SRC_BUY, -5.0), EPS);
-        assertEquals(9.0, PowerMath.applyEventClamp(pc, PowerMath.SRC_ADMIN_ADD, 9.0), EPS);
+        assertEquals(-5.0, PowerMath.applyEventClamp(pc, PowerSource.BUY, -5.0), EPS);
+        assertEquals(9.0, PowerMath.applyEventClamp(pc, PowerSource.ADMIN_ADD, 9.0), EPS);
         // maxChangePerEvent <= 0 disables the clamp entirely.
         PowerConfig none = PowerConfig.defaults();
-        assertEquals(-5.0, PowerMath.applyEventClamp(none, PowerMath.SRC_DEATH, -5.0), EPS);
+        assertEquals(-5.0, PowerMath.applyEventClamp(none, PowerSource.DEATH, -5.0), EPS);
     }
 
     // ── full apply pipeline: clamp + no-change epsilon + freeze gating ──────────────────────
@@ -143,27 +144,27 @@ class FormulaPinTest {
         PowerConfig pc = PowerConfig.defaults();
         BakedTables baked = BakedTables.defaults(pc);
         // death from full power: 10 - 4 => 6
-        PowerMath.PowerResult r = PowerMath.apply(pc, baked, 10.0, false, PowerMath.SRC_DEATH, 4.0,
+        PowerMath.PowerResult r = PowerMath.apply(pc, baked, 10.0, false, PowerSource.DEATH, 4.0,
                 false, -1, PowerMath.ZONE_WILDERNESS, "DEATH");
         assertTrue(r.changed());
         assertEquals(6.0, r.after(), EPS);
         assertEquals(-4.0, r.effectiveDelta(), EPS);
 
         // death from 0 power: clamps at min, effective 0 => NO_CHANGE
-        PowerMath.PowerResult z = PowerMath.apply(pc, baked, 0.0, false, PowerMath.SRC_DEATH, 4.0,
+        PowerMath.PowerResult z = PowerMath.apply(pc, baked, 0.0, false, PowerSource.DEATH, 4.0,
                 false, -1, PowerMath.ZONE_WILDERNESS, "DEATH");
         assertFalse(z.changed());
         assertEquals(0.0, z.effectiveDelta(), EPS);
         assertEquals("NO_CHANGE", z.reasonCode());
 
         // frozen blocks an automatic source (freezeBlocksAutomatic default true)
-        PowerMath.PowerResult f = PowerMath.apply(pc, baked, 8.0, true, PowerMath.SRC_DEATH, 4.0,
+        PowerMath.PowerResult f = PowerMath.apply(pc, baked, 8.0, true, PowerSource.DEATH, 4.0,
                 false, -1, PowerMath.ZONE_WILDERNESS, "DEATH");
         assertTrue(f.blockedByFreeze());
         assertFalse(f.changed());
 
         // admin bypass ignores freeze
-        PowerMath.PowerResult a = PowerMath.apply(pc, baked, 8.0, true, PowerMath.SRC_ADMIN_ADD, 1.0,
+        PowerMath.PowerResult a = PowerMath.apply(pc, baked, 8.0, true, PowerSource.ADMIN_ADD, 1.0,
                 true, -1, PowerMath.ZONE_WILDERNESS, "ADMIN_ADD");
         assertTrue(a.changed());
         assertEquals(9.0, a.after(), EPS);

@@ -30,6 +30,15 @@ import dev.fablemc.factions.kernel.state.MergeTable;
 import dev.fablemc.factions.kernel.state.NameIndex;
 import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.RelationEdges;
+import dev.fablemc.factions.kernel.intent.SessionIntent;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.LifecycleIntent;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.MembershipEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /**
  * Shared test harness for the reducer suite (Wave 2a). Not a test class.
@@ -133,7 +142,7 @@ final class Kern {
                     if (isPageEntity(e)) {
                         pageEntities++;
                     }
-                    if (e instanceof Effect.ContinuationRequested cr) {
+                    if (e instanceof SystemEffect.ContinuationRequested cr) {
                         queue.add(cr.next());
                     }
                 }
@@ -161,8 +170,8 @@ final class Kern {
 
         /** Creates a faction and returns its handle, or -1 on rejection. */
         int createFaction(String name, UUID owner) {
-            for (Effect e : apply(new Intent.CreateFaction(name, owner))) {
-                if (e instanceof Effect.FactionCreated fc) {
+            for (Effect e : apply(new LifecycleIntent.CreateFaction(name, owner))) {
+                if (e instanceof LifecycleEffect.FactionCreated fc) {
                     return fc.faction();
                 }
             }
@@ -171,12 +180,12 @@ final class Kern {
 
         /** Connects a player (online + settled). */
         void connect(UUID p) {
-            apply(new Intent.PlayerConnected(p, "P" + p.getLeastSignificantBits(), "en"));
+            apply(new SessionIntent.PlayerConnected(p, "P" + p.getLeastSignificantBits(), "en"));
         }
 
         /** Sets a member's power via admin-set (bypasses freeze; clamped to config max). */
         void setPower(UUID p, double amount) {
-            apply(new Intent.AdminPowerSet(p, amount, player(999), "test"));
+            apply(new PowerIntent.AdminPowerSet(p, amount, player(999), "test"));
         }
     }
 
@@ -433,7 +442,7 @@ final class Kern {
 
     static boolean hasRejection(List<Effect> effects) {
         for (Effect e : effects) {
-            if (e instanceof Effect.Rejected) {
+            if (e instanceof FeedbackEffect.Rejected) {
                 return true;
             }
         }
@@ -442,7 +451,7 @@ final class Kern {
 
     static dev.fablemc.factions.kernel.msg.ReasonCode firstReason(List<Effect> effects) {
         for (Effect e : effects) {
-            if (e instanceof Effect.Rejected r) {
+            if (e instanceof FeedbackEffect.Rejected r) {
                 return r.reason();
             }
         }
@@ -461,10 +470,10 @@ final class Kern {
 
     /** A per-entity effect (the kind AM-5 pages bound to {@link Reducer#PAGE_SIZE}). */
     static boolean isPageEntity(Effect e) {
-        return e instanceof Effect.ClaimSet || e instanceof Effect.ClaimRemoved
-                || e instanceof Effect.ZoneSet || e instanceof Effect.ZoneRemoved
-                || e instanceof Effect.MemberJoined || e instanceof Effect.MemberLeft
-                || e instanceof Effect.TaxCharged;
+        return e instanceof ClaimEffect.ClaimSet || e instanceof ClaimEffect.ClaimRemoved
+                || e instanceof ClaimEffect.ZoneSet || e instanceof ClaimEffect.ZoneRemoved
+                || e instanceof MembershipEffect.MemberJoined || e instanceof MembershipEffect.MemberLeft
+                || e instanceof EconomyEffect.TaxCharged;
     }
 
     /** Total money in kernel custody: Σ live-faction bank + open escrow. */

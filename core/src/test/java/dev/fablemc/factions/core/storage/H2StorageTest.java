@@ -22,6 +22,10 @@ import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.vocab.BankTxType;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /**
  * The H2 (in-memory) storage contract (work order W2b §3): schema creation + migrator idempotence,
@@ -88,10 +92,10 @@ final class H2StorageTest {
         long chunk = ChunkKeys.key(3, 4);
 
         List<Effect> batch = new ArrayList<>();
-        batch.add(new Effect.FactionCreated(1L, origin, handle, factionId, "Alpha"));
-        batch.add(new Effect.ClaimSet(2L, origin, 0, chunk, handle, FactionHandle.WILDERNESS));
+        batch.add(new LifecycleEffect.FactionCreated(1L, origin, handle, factionId, "Alpha"));
+        batch.add(new ClaimEffect.ClaimSet(2L, origin, 0, chunk, handle, FactionHandle.WILDERNESS));
         // A CRITICAL-tier bank movement: its projection commit is what releases the ack.
-        batch.add(new Effect.BankChanged(3L, origin, handle, 100.0, 100.0, Effect.TX_DEPOSIT,
+        batch.add(new EconomyEffect.BankChanged(3L, origin, handle, 100.0, 100.0, BankTxType.DEPOSIT,
                 origin.actor(), FactionHandle.WILDERNESS, "deposit"));
 
         projector.accept(batch, 3L);

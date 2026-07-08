@@ -3,6 +3,8 @@ package dev.fablemc.factions.kernel.state;
 import java.util.Arrays;
 import java.util.UUID;
 
+import dev.fablemc.factions.kernel.vocab.EscrowKind;
+
 /**
  * Open Vault sagas (escrows) — the durable in-flight-money record backing exactly-once
  * economy operations (AM-7, proposal-C §4.6).
@@ -20,15 +22,8 @@ import java.util.UUID;
  */
 public final class EscrowTable {
 
-    /** Deposit saga: wallet → escrow → bank. */
-    public static final byte KIND_DEPOSIT = 0;
-    /** Withdraw saga: bank → escrow → wallet. */
-    public static final byte KIND_WITHDRAW = 1;
-    /** Power-buy saga: wallet → escrow → power. */
-    public static final byte KIND_BUY = 2;
-
     /** One open escrow. Only open escrows are held; settlement removes the row. */
-    public record Escrow(long id, int kind, UUID player, int factionOrdinal, double amount,
+    public record Escrow(long id, EscrowKind kind, UUID player, int factionOrdinal, double amount,
                          long createdAt) {
     }
 

@@ -13,6 +13,10 @@ import org.junit.jupiter.api.Test;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.intent.SystemIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.PowerIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 
 /**
  * The MPSC bus contract (work order W2b §3): the bounded player lane answers
@@ -30,15 +34,15 @@ final class IntentBusTest {
     void boundedPlayerLaneRejectsAtCapacity() {
         IntentBus bus = bus(2);
         Origin o = Origin.player(new UUID(1, 1));
-        assertEquals(SubmitResult.ACCEPTED, bus.submit(new Intent.SetFly(o.actor(), true), o));
-        assertEquals(SubmitResult.ACCEPTED, bus.submit(new Intent.SetFly(o.actor(), false), o));
+        assertEquals(SubmitResult.ACCEPTED, bus.submit(new PrefIntent.SetFly(o.actor(), true), o));
+        assertEquals(SubmitResult.ACCEPTED, bus.submit(new PrefIntent.SetFly(o.actor(), false), o));
         // Third submit exceeds capacity → busy (never blocks the caller).
-        assertEquals(SubmitResult.REJECTED_BUSY, bus.submit(new Intent.SetFly(o.actor(), true), o));
+        assertEquals(SubmitResult.REJECTED_BUSY, bus.submit(new PrefIntent.SetFly(o.actor(), true), o));
 
         // Draining frees the lane so a later submit is accepted again.
         List<IntentEnvelope> out = new ArrayList<>();
         assertEquals(2, bus.drain(out, 16));
-        assertEquals(SubmitResult.ACCEPTED, bus.submit(new Intent.SetFly(o.actor(), true), o));
+        assertEquals(SubmitResult.ACCEPTED, bus.submit(new PrefIntent.SetFly(o.actor(), true), o));
     }
 
     @Test
@@ -47,17 +51,17 @@ final class IntentBusTest {
         Origin o = Origin.player(new UUID(2, 2));
         bus.beginShutdown();
         assertTrue(bus.isShuttingDown());
-        assertEquals(SubmitResult.REJECTED_SHUTDOWN, bus.submit(new Intent.SetFly(o.actor(), true), o));
+        assertEquals(SubmitResult.REJECTED_SHUTDOWN, bus.submit(new PrefIntent.SetFly(o.actor(), true), o));
     }
 
     @Test
     void powerTickCoalescesToNewestPending() {
         IntentBus bus = bus(8);
-        bus.submitSystem(new Intent.PowerTick(1));
-        bus.submitSystem(new Intent.PowerTick(2));
-        bus.submitSystem(new Intent.PowerTick(3));
+        bus.submitSystem(new PowerIntent.PowerTick(1));
+        bus.submitSystem(new PowerIntent.PowerTick(2));
+        bus.submitSystem(new PowerIntent.PowerTick(3));
         // A stale (older) tick submitted after a newer one is dropped, not enqueued.
-        bus.submitSystem(new Intent.PowerTick(2));
+        bus.submitSystem(new PowerIntent.PowerTick(2));
 
         assertEquals(1, bus.depth(), "at most one PowerTick may be pending");
 
@@ -65,16 +69,16 @@ final class IntentBusTest {
         int drained = bus.drain(out, 16);
         assertEquals(1, drained, "exactly one coalesced PowerTick is drained");
         Intent i = out.get(0).intent();
-        assertTrue(i instanceof Intent.PowerTick, "the drained intent is a PowerTick");
-        assertEquals(3, ((Intent.PowerTick) i).tick(), "the newest tick wins");
+        assertTrue(i instanceof PowerIntent.PowerTick, "the drained intent is a PowerTick");
+        assertEquals(3, ((PowerIntent.PowerTick) i).tick(), "the newest tick wins");
     }
 
     @Test
     void taxSweepCoalescesIndependentlyOfPowerTick() {
         IntentBus bus = bus(8);
-        bus.submitSystem(new Intent.TaxSweep(5));
-        bus.submitSystem(new Intent.TaxSweep(9));
-        bus.submitSystem(new Intent.PowerTick(4));
+        bus.submitSystem(new EconomyIntent.TaxSweep(5));
+        bus.submitSystem(new EconomyIntent.TaxSweep(9));
+        bus.submitSystem(new PowerIntent.PowerTick(4));
 
         List<IntentEnvelope> out = new ArrayList<>();
         int drained = bus.drain(out, 16);
@@ -83,10 +87,10 @@ final class IntentBusTest {
         boolean sawTax9 = false;
         boolean sawPower4 = false;
         for (IntentEnvelope env : out) {
-            if (env.intent() instanceof Intent.TaxSweep ts && ts.tick() == 9) {
+            if (env.intent() instanceof EconomyIntent.TaxSweep ts && ts.tick() == 9) {
                 sawTax9 = true;
             }
-            if (env.intent() instanceof Intent.PowerTick pt && pt.tick() == 4) {
+            if (env.intent() instanceof PowerIntent.PowerTick pt && pt.tick() == 4) {
                 sawPower4 = true;
             }
         }
@@ -98,13 +102,13 @@ final class IntentBusTest {
     void systemLaneIsUnbounded() {
         IntentBus bus = bus(1);   // tiny player capacity must not constrain the system lane
         for (int i = 0; i < 100; i++) {
-            bus.submitSystem(new Intent.RetagPage(i));
+            bus.submitSystem(new SystemIntent.RetagPage(i));
         }
         List<IntentEnvelope> out = new ArrayList<>();
         assertEquals(100, bus.drain(out, 1000));
         // Ordering is FIFO on the system lane.
-        assertSame(Intent.RetagPage.class, out.get(0).intent().getClass());
-        assertEquals(0, ((Intent.RetagPage) out.get(0).intent()).cursor());
-        assertEquals(99, ((Intent.RetagPage) out.get(99).intent()).cursor());
+        assertSame(SystemIntent.RetagPage.class, out.get(0).intent().getClass());
+        assertEquals(0, ((SystemIntent.RetagPage) out.get(0).intent()).cursor());
+        assertEquals(99, ((SystemIntent.RetagPage) out.get(99).intent()).cursor());
     }
 }

@@ -21,6 +21,11 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Reducer;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /**
  * The writer's failure boundary + AM-5 continuation contract (work order W2b §3). Exercised
@@ -72,9 +77,9 @@ final class WriterThreadTest {
 
         UUID actor = new UUID(1, 1);
         Origin o = Origin.player(actor);
-        bus.submit(new Intent.SetFly(actor, true), o);
-        bus.submit(new Intent.SetFly(actor, false), o);
-        bus.submit(new Intent.SetFly(actor, true), o);
+        bus.submit(new PrefIntent.SetFly(actor, true), o);
+        bus.submit(new PrefIntent.SetFly(actor, false), o);
+        bus.submit(new PrefIntent.SetFly(actor, true), o);
 
         int processed = writer.drainAndProcess();
         assertEquals(3, processed, "all three intents are processed — the pipeline continues");
@@ -100,25 +105,25 @@ final class WriterThreadTest {
         Capture journal = new Capture();
         Capture fanout = new Capture();
 
-        Intent nextPage = new Intent.TaxSweepPage(9, 1024);
+        Intent nextPage = new EconomyIntent.TaxSweepPage(9, 1024);
         // Stub emits one domain effect + one ContinuationRequested (the AM-5 paging control effect).
         ReduceStep paging = (state, env) -> {
             List<Effect> out = new ArrayList<>();
-            out.add(new Effect.ClaimRemoved(env.seq(), env.origin(), 0, 123L, -1));
-            out.add(new Effect.ContinuationRequested(env.seq(), env.origin(), nextPage));
+            out.add(new ClaimEffect.ClaimRemoved(env.seq(), env.origin(), 0, 123L, -1));
+            out.add(new SystemEffect.ContinuationRequested(env.seq(), env.origin(), nextPage));
             return new Reducer.Outcome(state, out);
         };
         WriterThread writer = new WriterThread(bus, hub, initial, 0L, paging, journal, fanout,
                 FailureHandler.IGNORE, () -> 0L, QUIET);
 
-        bus.submitSystem(new Intent.TaxSweep(9));   // seeds one intent to reduce
+        bus.submitSystem(new EconomyIntent.TaxSweep(9));   // seeds one intent to reduce
         writer.drainAndProcess();
 
         // The control effect is stripped: only the domain effect reaches journal + fanout.
         assertEquals(1, journal.effects.size(), "ContinuationRequested must not be journaled");
-        assertTrue(journal.effects.get(0) instanceof Effect.ClaimRemoved);
+        assertTrue(journal.effects.get(0) instanceof ClaimEffect.ClaimRemoved);
         assertEquals(1, fanout.effects.size());
-        assertTrue(fanout.effects.get(0) instanceof Effect.ClaimRemoved);
+        assertTrue(fanout.effects.get(0) instanceof ClaimEffect.ClaimRemoved);
 
         // The continuation intent is re-enqueued on the system lane for the next drain.
         List<IntentEnvelope> out = new ArrayList<>();
@@ -127,6 +132,6 @@ final class WriterThreadTest {
     }
 
     private static ReasonCode reason(Effect e) {
-        return ((Effect.Rejected) e).reason();
+        return ((FeedbackEffect.Rejected) e).reason();
     }
 }
