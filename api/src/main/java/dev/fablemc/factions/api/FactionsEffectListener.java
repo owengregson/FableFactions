@@ -34,7 +34,7 @@ public interface FactionsEffectListener {
     default void onMemberLeft(UUID factionId, UUID player, boolean kicked) {
     }
 
-    /** A chunk was claimed for a faction ({@code overclaimedFrom} is empty for wilderness). */
+    /** A chunk was claimed for {@code factionId} (whether from wilderness or by overclaim). */
     default void onChunkClaimed(String world, int chunkX, int chunkZ, UUID factionId) {
     }
 

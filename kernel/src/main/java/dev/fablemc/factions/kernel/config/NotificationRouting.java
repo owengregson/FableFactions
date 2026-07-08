@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed {@code notifications.yml} routing (pvp-resources.md §3, pvp-services.md §2.3).
+ * Typed {@code notifications.yml} routing (ref-resources.md §3, ref-services.md §2.3).
  *
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.

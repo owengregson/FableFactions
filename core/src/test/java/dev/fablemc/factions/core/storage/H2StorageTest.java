@@ -18,14 +18,14 @@ import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.vocab.BankTxType;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /**
  * The H2 (in-memory) storage contract (work order W2b §3): schema creation + migrator idempotence,

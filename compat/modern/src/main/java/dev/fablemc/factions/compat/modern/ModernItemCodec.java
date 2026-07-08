@@ -1,8 +1,8 @@
 package dev.fablemc.factions.compat.modern;
 
-import dev.fablemc.factions.platform.resolve.ItemBytesCodec;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.resolve.ItemBytesCodec;
 
 /**
  * The modern item byte codec (CONTRACTS §3, version-deltas Risk #9). Uses Paper's

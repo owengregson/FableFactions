@@ -1,8 +1,10 @@
 package dev.fablemc.factions.kernel.rules;
 
+import java.util.Locale;
+
 /**
  * Money parsing and rounding, transcribed from the reference {@code MoneyParser} and
- * {@code roundMoney} (pvp-services.md §8.2, §5(e); pvp-bugs-concurrency Appendix).
+ * {@code roundMoney} (ref-services.md §8.2, §5(e); ref-bugs-concurrency Appendix).
  *
  * <p><b>Owning thread(s):</b> pure static, callable from the command layer (pre-validate) and
  * the reducer alike. <b>Mutability:</b> stateless. <b>Reducer rule:</b> the reducer rounds every
@@ -38,7 +40,7 @@ public final class MoneyMath {
         if (raw == null) {
             return INVALID;
         }
-        String s = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        String s = raw.trim().toLowerCase(Locale.ROOT);
         if (s.isEmpty()) {
             return INVALID;
         }

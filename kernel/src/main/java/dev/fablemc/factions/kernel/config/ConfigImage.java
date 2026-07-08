@@ -9,7 +9,7 @@ package dev.fablemc.factions.kernel.config;
  * published inside the snapshot; read on any thread. <b>Mutability:</b> immutable record of
  * records. <b>Reducer rule:</b> replaced whole by the reducer on {@code SwapConfig}.
  *
- * <p>Every key from the reference inventory (pvp-resources.md, pvp-services.md §2) is present as
+ * <p>Every key from the reference inventory (ref-resources.md, ref-services.md §2) is present as
  * a typed field with the reference default; aliased keys collapse to one canonical field at
  * parse. Domain sections are grouped into their section records ({@link PowerConfig},
  * {@link LandConfig}, …); cross-cutting scalars (limits, language, display, updates, metrics,

@@ -4,12 +4,13 @@ import dev.fablemc.factions.kernel.effect.SessionEffect;
 import dev.fablemc.factions.kernel.intent.SessionIntent;
 
 /**
- * Session intents: player connect-disconnect power settlement / inbox acknowledgement.
+ * Reduces the session intents: player connect-disconnect power settlement / inbox acknowledgement.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class SessionReducer {
 
@@ -27,6 +28,7 @@ final class SessionReducer {
             throw new IllegalStateException("unhandled session intent: " + i.getClass().getName());
         }
     }
+
     static void playerConnected(ReduceSupport s, SessionIntent.PlayerConnected c) {
         int ord = s.ensureMember(c.player(), c.name());
         if (c.name() != null && !c.name().isEmpty()) {

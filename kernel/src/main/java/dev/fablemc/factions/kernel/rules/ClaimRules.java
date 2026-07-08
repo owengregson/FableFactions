@@ -10,7 +10,7 @@ import dev.fablemc.factions.kernel.state.RelationKind;
 
 /**
  * Claiming / overclaim / max-land / adjacency rules, transcribed from {@code EngineChunkChange}
- * (pvp-services.md §6, pvp-engines.md §3.2). Pure static functions shared by command pre-validation
+ * (ref-services.md §6, ref-engines.md §3.2). Pure static functions shared by command pre-validation
  * and the reducer.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>

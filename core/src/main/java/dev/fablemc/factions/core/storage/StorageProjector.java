@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.IntFunction;
 import java.util.function.LongSupplier;
+import javax.sql.DataSource;
 
 import dev.fablemc.factions.core.pipeline.EffectSink;
 import dev.fablemc.factions.core.storage.project.ProjectionContext;
@@ -54,7 +55,7 @@ public final class StorageProjector implements EffectSink, AutoCloseable {
     private static final int FLUSH_EFFECT_THRESHOLD = 4_000;
     private static final long FLUSH_INTERVAL_NANOS = 250L * 1_000_000L;
 
-    private final javax.sql.DataSource dataSource;
+    private final DataSource dataSource;
     private final FlushListener ack;
 
     private final Queue<Pending> queue = new ConcurrentLinkedQueue<>();
@@ -63,7 +64,7 @@ public final class StorageProjector implements EffectSink, AutoCloseable {
     private volatile Thread thread;
     private volatile boolean running;
 
-    public StorageProjector(javax.sql.DataSource dataSource, SqlDialect dialect,
+    public StorageProjector(DataSource dataSource, SqlDialect dialect,
                             IntFunction<String> worldResolver, LongSupplier wallClock,
                             FlushListener ack) {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
@@ -141,11 +142,11 @@ public final class StorageProjector implements EffectSink, AutoCloseable {
         int effectCount = 0;
         Pending p;
         while ((p = queue.poll()) != null) {
-            for (int i = 0; i < p.batch.size(); i++) {
-                Projections.dispatch(ctx, p.batch.get(i));
+            for (int i = 0; i < p.batch().size(); i++) {
+                Projections.dispatch(ctx, p.batch().get(i));
                 effectCount++;
             }
-            checkpoint = p.lastSeq;
+            checkpoint = p.lastSeq();
             any = true;
         }
         if (!any) {

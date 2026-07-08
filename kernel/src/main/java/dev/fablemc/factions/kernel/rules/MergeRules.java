@@ -7,7 +7,7 @@ import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.MergeTable;
 
 /**
- * Faction merge validation (pvp-services.md §7.5, pvp-commands-misc.md merge). Pure static
+ * Faction merge validation (ref-services.md §7.5, ref-commands-misc.md merge). Pure static
  * functions shared by the command layer and reducer.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>

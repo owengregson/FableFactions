@@ -13,6 +13,9 @@ import dev.fablemc.factions.kernel.config.PowerConfig;
  * The lazy-accrual clamp-equivalence property (proposal-C §4.5): settling power with the single
  * closed-form clamp {@code KernelSnapshot.powerAt} must equal iterating the per-tick clamp for a
  * constant regen rate over a base within {@code [min, max]}.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 class PowerAccrualTest {
 

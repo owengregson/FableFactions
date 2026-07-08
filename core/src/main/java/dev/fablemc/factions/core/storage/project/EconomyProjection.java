@@ -19,9 +19,9 @@ public final class EconomyProjection {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
             ctx.factionUpdate(x.faction(), "`money`=?", x.balance());
-            ctx.add(bankTxInsert(ctx, x.seq(), fid, txLabel(x.txType()), x.delta(),
+            bankTxInsert(ctx, x.seq(), fid, txLabel(x.txType()), x.delta(),
                     x.actor() == null ? null : x.actor().toString(),
-                    ctx.factionId(x.counterparty()), x.note()));
+                    ctx.factionId(x.counterparty()), x.note());
         }
     }
 
@@ -29,26 +29,29 @@ public final class EconomyProjection {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
             ctx.factionUpdate(x.faction(), "`money`=?", x.balance());
-            ctx.add(bankTxInsert(ctx, x.seq(), fid, "TAX", -x.amount(), null, null, null));
+            bankTxInsert(ctx, x.seq(), fid, "TAX", -x.amount(), null, null, null);
         }
     }
 
-    private static ProjectionOp bankTxInsert(ProjectionContext ctx, long seq, String factionId,
-                                             String type, double amount, String actor,
-                                             String counterparty, String note) {
-        return new ProjectionOp(ctx.dialect().upsert("bank_transactions", new String[] {"id",
-                "faction_id", "actor_uuid", "type", "amount", "counterparty_faction_id", "created_at",
-                "note"}, new String[] {"id"}),
-                new Object[] {ctx.ledgerId(seq), factionId, actor, type, amount, counterparty,
-                        ctx.now(), note});
+    private static void bankTxInsert(ProjectionContext ctx, long seq, String factionId,
+                                     String type, double amount, String actor,
+                                     String counterparty, String note) {
+        ctx.upsertById("bank_transactions", new String[] {"id", "faction_id", "actor_uuid", "type",
+                "amount", "counterparty_faction_id", "created_at", "note"},
+                ctx.ledgerId(seq), factionId, actor, type, amount, counterparty, ctx.now(), note);
     }
 
+    /**
+     * The reference-parity {@code bank_transactions.type} label. Deliberately an exhaustive switch
+     * (no {@code default}) rather than {@code name()}: the compiler flags a new {@link BankTxType},
+     * and an enum-constant rename can never silently change the persisted DB vocabulary.
+     */
     private static String txLabel(BankTxType txType) {
         return switch (txType) {
+            case DEPOSIT -> "DEPOSIT";
             case WITHDRAW -> "WITHDRAW";
             case TRANSFER -> "TRANSFER";
             case TAX -> "TAX";
-            default -> "DEPOSIT";
         };
     }
 }

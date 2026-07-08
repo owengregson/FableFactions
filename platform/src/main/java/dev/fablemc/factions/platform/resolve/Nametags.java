@@ -1,13 +1,12 @@
 package dev.fablemc.factions.platform.resolve;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import org.bukkit.ChatColor;
-import org.bukkit.Material;
 import org.bukkit.scoreboard.Team;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * Scoreboard team prefix budgeting and name colour (CONTRACTS §3, version-deltas Risk #10).
@@ -27,21 +26,11 @@ import org.jetbrains.annotations.Nullable;
 public final class Nametags {
 
     /** The prefix/suffix character budget: 64 on a flattened (1.13+) server, else 16. */
-    private static final int BUDGET = Material.getMaterial("WHITE_WOOL") != null ? 64 : 16;
+    private static final int BUDGET = Probes.flattened() ? 64 : 16;
 
     /** {@code Team#setColor(ChatColor)} handle (1.12/1.13+), or {@code null} — prefix-tail colour. */
-    private static final @Nullable MethodHandle SET_COLOR;
-
-    static {
-        MethodHandle setColor = null;
-        try {
-            setColor = MethodHandles.lookup().findVirtual(
-                    Team.class, "setColor", MethodType.methodType(void.class, ChatColor.class));
-        } catch (ReflectiveOperationException | LinkageError absent) {
-            setColor = null;
-        }
-        SET_COLOR = setColor;
-    }
+    private static final @Nullable MethodHandle SET_COLOR = Probes.virtualHandle(
+            Team.class, "setColor", MethodType.methodType(void.class, ChatColor.class));
 
     private Nametags() {}
 

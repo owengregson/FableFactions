@@ -11,7 +11,12 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Collision churn (insert/remove/re-insert) and COW isolation for {@link MemberDirectory}. */
+/**
+ * Collision churn (insert/remove/re-insert) and COW isolation for {@link MemberDirectory}.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class MemberDirectoryTest {
 
     @Test

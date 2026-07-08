@@ -18,12 +18,13 @@ import dev.fablemc.factions.kernel.state.FactionArena;
 import dev.fablemc.factions.kernel.vocab.PowerSource;
 
 /**
- * Power intents: death loss and kill gain / power tick raidable recompute / buy / admin set-add-remove-reset / freeze.
+ * Reduces the power intents: death loss and kill gain / power tick raidable recompute / buy / admin set-add-remove-reset / freeze.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class PowerReducer {
 
@@ -51,6 +52,7 @@ final class PowerReducer {
             throw new IllegalStateException("unhandled power intent: " + i.getClass().getName());
         }
     }
+
     static PowerMath.PowerResult applyPower(ReduceSupport s, int ord, PowerSource source, double baseDelta,
                                              boolean bypassFreeze, int worldIdx, int zoneCtx,
                                              String reason) {
@@ -148,8 +150,8 @@ final class PowerReducer {
 
     static void recomputeRaidableAll(ReduceSupport s) {
         FactionArena arena = s.state.factions();
-        int hw = arena.highWater();
-        for (int ord = FactionHandle.FIRST_NORMAL_ORDINAL; ord < hw; ord++) {
+        int highWater = arena.highWater();
+        for (int ord = FactionHandle.FIRST_NORMAL_ORDINAL; ord < highWater; ord++) {
             Faction f = arena.at(ord);
             if (f == null || !f.isNormal()) {
                 continue;

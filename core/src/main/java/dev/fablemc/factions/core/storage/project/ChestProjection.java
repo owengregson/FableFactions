@@ -17,8 +17,8 @@ public final class ChestProjection {
     public static void apply(ProjectionContext ctx, ChestEffect.ChestContentsChanged x) {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
-            ctx.add(new ProjectionOp("UPDATE `team_chests` SET `blob_ref`=? WHERE `faction_id`=? "
-                    + "AND `name`=?", new Object[] {x.blobRef(), fid, x.name()}));
+            ctx.op("UPDATE `team_chests` SET `blob_ref`=? WHERE `faction_id`=? AND `name`=?",
+                    x.blobRef(), fid, x.name());
         }
     }
 }

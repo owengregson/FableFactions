@@ -1,10 +1,10 @@
 package dev.fablemc.factions.api.event;
 
 import java.util.UUID;
-import dev.fablemc.factions.api.BankTransactionType;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
+import dev.fablemc.factions.api.BankTransactionType;
 
 /**
  * Fired before a faction bank movement (proposal-C §10.2), during pre-flight on the caller

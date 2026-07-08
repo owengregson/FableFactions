@@ -9,7 +9,7 @@ import java.sql.Statement;
 /**
  * Versioned, idempotent schema migration (proposal-C §6.3). Creates the base schema, ensures the
  * single {@code ff_meta} control row, applies the reference's {@code ensureColumn} column-add
- * migrations (pvp-data §5) — all guarded by {@code ADD COLUMN IF NOT EXISTS} with the reference's
+ * migrations (ref-data §5) — all guarded by {@code ADD COLUMN IF NOT EXISTS} with the reference's
  * retry-and-swallow fallback for engines lacking that clause — and records {@code schema_version}.
  *
  * <p>Running {@link #migrate} twice is a no-op the second time (every statement is idempotent and
@@ -74,7 +74,7 @@ public final class SchemaMigrator {
 
     private static void applyColumnMigrations(Connection conn) throws SQLException {
         // These columns are also in the CREATE TABLE, so on a fresh DB they already exist and each
-        // ensureColumn is a no-op; on an upgraded DB they are added here (pvp-data §5).
+        // ensureColumn is a no-op; on an upgraded DB they are added here (ref-data §5).
         ensureColumn(conn, "players", "auto_territory_mode", "TINYINT NOT NULL DEFAULT 0");
         ensureColumn(conn, "players", "notify_invites", "TINYINT NOT NULL DEFAULT 1");
         ensureColumn(conn, "players", "notify_bank_tax", "TINYINT NOT NULL DEFAULT 1");
@@ -88,7 +88,7 @@ public final class SchemaMigrator {
     }
 
     /**
-     * Idempotently adds {@code column} to {@code table} (pvp-data §5): tries {@code ADD COLUMN IF
+     * Idempotently adds {@code column} to {@code table} (ref-data §5): tries {@code ADD COLUMN IF
      * NOT EXISTS}, retries without the clause, and swallows "already/exists/duplicate" errors.
      */
     static void ensureColumn(Connection conn, String table, String column, String columnSql)

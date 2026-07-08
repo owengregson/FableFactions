@@ -7,7 +7,7 @@ package dev.fablemc.factions.kernel.config;
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.
  *
  * <p>When a zone system is disabled, its chunks are treated as wilderness by {@code Verdicts}
- * and power math (pvp-resources.md §1.11).
+ * and power math (ref-resources.md §1.11).
  */
 public record ZoneConfig(boolean safeZoneEnabled, boolean warZoneEnabled) {
 

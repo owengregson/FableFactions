@@ -19,12 +19,12 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.vocab.BankTxType;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
 
 /**
  * MySQL projection parity, gated behind {@code FABLE_MYSQL_TEST=1} and default-skipped (work order

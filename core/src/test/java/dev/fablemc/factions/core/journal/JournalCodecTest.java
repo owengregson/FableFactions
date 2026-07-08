@@ -14,34 +14,33 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
+import dev.fablemc.factions.kernel.effect.AuditEffect;
+import dev.fablemc.factions.kernel.effect.ChestEffect;
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
+import dev.fablemc.factions.kernel.effect.EconomyEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
-import dev.fablemc.factions.kernel.intent.Intent;
+import dev.fablemc.factions.kernel.effect.ExternalEffect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.effect.MembershipEffect;
+import dev.fablemc.factions.kernel.effect.PowerEffect;
+import dev.fablemc.factions.kernel.effect.PrefEffect;
+import dev.fablemc.factions.kernel.effect.RelationEffect;
+import dev.fablemc.factions.kernel.effect.RoleEffect;
+import dev.fablemc.factions.kernel.effect.SessionEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.effect.TravelEffect;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.intent.SystemIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
-import dev.fablemc.factions.kernel.vocab.Relation;
-import dev.fablemc.factions.kernel.vocab.PowerSource;
-import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
-import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
-import dev.fablemc.factions.kernel.vocab.BroadcastScope;
 import dev.fablemc.factions.kernel.vocab.BankTxType;
-import dev.fablemc.factions.kernel.intent.SystemIntent;
-import dev.fablemc.factions.kernel.effect.TravelEffect;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.SessionEffect;
-import dev.fablemc.factions.kernel.effect.RoleEffect;
-import dev.fablemc.factions.kernel.effect.RelationEffect;
-import dev.fablemc.factions.kernel.effect.PrefEffect;
-import dev.fablemc.factions.kernel.effect.PowerEffect;
-import dev.fablemc.factions.kernel.effect.MembershipEffect;
-import dev.fablemc.factions.kernel.effect.LifecycleEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
-import dev.fablemc.factions.kernel.effect.ExternalEffect;
-import dev.fablemc.factions.kernel.effect.EconomyEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
-import dev.fablemc.factions.kernel.effect.ChestEffect;
-import dev.fablemc.factions.kernel.effect.AuditEffect;
+import dev.fablemc.factions.kernel.vocab.BroadcastScope;
+import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
+import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
+import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
+import dev.fablemc.factions.kernel.vocab.PowerSource;
+import dev.fablemc.factions.kernel.vocab.Relation;
 
 /**
  * The journal-codec contract (work order W2b §3): the tag registry is <b>complete</b> — every

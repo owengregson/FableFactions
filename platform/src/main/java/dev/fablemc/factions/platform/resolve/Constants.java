@@ -1,6 +1,5 @@
 package dev.fablemc.factions.platform.resolve;
 
-import dev.fablemc.factions.platform.probe.Probes;
 import org.bukkit.GameMode;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -8,6 +7,7 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * Every post-1.7.10 Bukkit enum constant a factions plugin touches, resolved ONCE at

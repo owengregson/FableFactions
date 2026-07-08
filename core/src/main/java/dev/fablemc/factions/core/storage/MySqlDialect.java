@@ -10,6 +10,9 @@ package dev.fablemc.factions.core.storage;
  */
 public final class MySqlDialect implements SqlDialect {
 
+    /** The pinned {@link #name()} value ({@code ff_meta} / logging vocabulary). */
+    public static final String NAME = "mysql";
+
     /** The shared stateless instance. */
     public static final MySqlDialect INSTANCE = new MySqlDialect();
 
@@ -18,18 +21,19 @@ public final class MySqlDialect implements SqlDialect {
 
     @Override
     public String name() {
-        return "mysql";
+        return NAME;
     }
 
     @Override
     public String driverClassName() {
-        if (classPresent("dev.fablemc.factions.lib.mysql.cj.jdbc.Driver")) {
+        // shaded/relocated first, canonical fallback (ref-data §6)
+        if (SqlDialect.classPresent("dev.fablemc.factions.lib.mysql.cj.jdbc.Driver")) {
             return "dev.fablemc.factions.lib.mysql.cj.jdbc.Driver";
         }
         return "com.mysql.cj.jdbc.Driver";
     }
 
-    /** Builds the MySQL URL with the reference-parity connection flags (pvp-data §2). */
+    /** Builds the MySQL URL with the reference-parity connection flags (ref-data §2). */
     public static String url(String host, int port, String database) {
         return "jdbc:mysql://" + host + ":" + port + "/" + database
                 + "?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC";
@@ -65,14 +69,5 @@ public final class MySqlDialect implements SqlDialect {
             }
         }
         return false;
-    }
-
-    private static boolean classPresent(String name) {
-        try {
-            Class.forName(name, false, MySqlDialect.class.getClassLoader());
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
     }
 }

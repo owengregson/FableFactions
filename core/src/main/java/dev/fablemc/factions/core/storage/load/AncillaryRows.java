@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 import dev.fablemc.factions.kernel.state.ChestRef;
 import dev.fablemc.factions.kernel.state.ChestTable;
@@ -54,7 +56,7 @@ final class AncillaryRows {
     }
 
     static WarpTable readWarps(Connection conn, Map<String, Integer> ordinalByFactionId,
-                               java.util.function.ToIntFunction<String> worldIndex, Progress progress)
+                               ToIntFunction<String> worldIndex, Progress progress)
             throws SQLException {
         WarpTable table = WarpTable.empty();
         String sql = "SELECT `faction_id`,`name`,`world`,`x`,`y`,`z`,`yaw`,`pitch`,`creator_id`,"
@@ -111,7 +113,7 @@ final class AncillaryRows {
             while (rs.next()) {
                 progress.tick();
                 Integer ordinal = ordinalByFactionId.get(rs.getString("faction_id"));
-                java.util.UUID invitee = LoadSupport.parseUuid(rs.getString("invitee_id"));
+                UUID invitee = LoadSupport.parseUuid(rs.getString("invitee_id"));
                 if (ordinal == null || invitee == null) {
                     continue;
                 }

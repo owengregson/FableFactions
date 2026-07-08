@@ -387,12 +387,29 @@ UUID, org.bukkit.Location, enums defined in `:api`).
    Wave 2a REPLACES it (documented ownership handoff).
 6. The scaffold's `core/build.gradle.kts` gate wiring, relocations, and ignore lists are
    final — do not touch them without a work order saying so.
-7. **FableFactions is a standalone project.** No reference-implementation tokens
-   ("pvpindex" in any casing) may appear anywhere in the repo; there is NO legacy importer
+7. **FableFactions is a standalone project.** The reference project's name (in any casing
+   or spacing) may not appear anywhere in the repo; there is NO legacy importer
    and none may be added; PlaceholderAPI ships `%fable_<param>%` only (no compat aliases);
    the dynmap layer id is `fablefactions`; the update checker points at
    fablefactions/fablemc/FableFactions. Behavior-parity research lives in
-   `docs/research/ref-*.md` (renamed from pvp-*.md) and refers only to "the reference
-   implementation". `RowJson` (formerly LegacyImportSupport) parses OUR schema's JSON
-   columns for the BaselineLoader.
+   `docs/research/ref-*.md` and refers only to "the reference implementation".
+   `RowJson` (formerly LegacyImportSupport) parses OUR schema's JSON columns for the
+   BaselineLoader.
+8. **House style (established by the Wave 2.5 idiom sweep — follow in ALL new code):**
+   (a) guard idiom — reducers use `ReduceSupport.rejectIf(reason)` / `factionOrReject(...)`
+   single-expression guards; command/listener layers use the same one-shape early-return
+   guards; (b) emission funnel — reducers NEVER touch the effect list directly: everything
+   goes through `ReduceSupport.emit(...)` or its named wrappers (reject/notify/
+   notifyFaction/audit/continuation); (c) enums carry their constants — an enum that maps
+   to a MessageKey/codec/label interns it ONCE in a final field (never per-call
+   `MessageKey.of`), and DB/wire labels are explicit fields, never `name()`/`ordinal()`;
+   (d) switch discipline — prefer exhaustive switch EXPRESSIONS on enums/sealed types with
+   no default so the compiler proves totality; instanceof-chain dispatchers keep the AM-9
+   fail-safe throw; (e) javadoc voice — first line of every class is one present-tense
+   role sentence ("Owns…", "Publishes…", "The only…") plus the owning-thread/mutability
+   tags; (f) imports — java → javax → third-party → dev.fablemc, alphabetical, no
+   wildcards, no inline FQNs for imported types; (g) named constants over magic literals
+   (segment prefixes, frame sizes, dialect names, SQL key triples); (h) no
+   streams/iterators/boxing on hot paths, with an explicit justification comment on any
+   deliberate writer-side allocation.
 ```

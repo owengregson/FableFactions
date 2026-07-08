@@ -1,12 +1,13 @@
 package dev.fablemc.factions.compat.modern;
 
+import java.util.Collection;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import com.mojang.brigadier.tree.LiteralCommandNode;
-import java.util.Collection;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.probe.ProbeTarget;
 
 /**
  * Optional Brigadier command-tree installer (CONTRACTS §3, proposal-C §7.6). On 1.20.6+ this
@@ -25,12 +26,7 @@ public final class BrigadierInstaller {
 
     /** Whether the Paper Brigadier command API is present on this server. */
     public static boolean supported() {
-        try {
-            Class.forName("io.papermc.paper.command.brigadier.Commands");
-            return true;
-        } catch (ClassNotFoundException | LinkageError absent) {
-            return false;
-        }
+        return ProbeTarget.BRIGADIER_COMMANDS.present();
     }
 
     /**

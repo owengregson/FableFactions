@@ -31,16 +31,12 @@ public enum PagePhase {
         return code;
     }
 
-    /** The next phase; FINAL is terminal and returns itself. */
+    /** The next phase; FINAL is terminal and returns itself (exhaustive — the compiler proves it). */
     public PagePhase next() {
-        switch (this) {
-            case CLAIMS:
-                return MEMBERS;
-            case MEMBERS:
-                return FINAL;
-            default:
-                return FINAL;
-        }
+        return switch (this) {
+            case CLAIMS -> MEMBERS;
+            case MEMBERS, FINAL -> FINAL;
+        };
     }
 
     private static final PagePhase[] VALUES = values();

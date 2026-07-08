@@ -25,12 +25,13 @@ import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.PagePhase;
 
 /**
- * Lifecycle intents: create / disband (paged) / rename / description / motd / ownership transfer / merge (paged).
+ * Reduces the lifecycle intents: create / disband (paged) / rename / description / motd / ownership transfer / merge (paged).
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class LifecycleReducer {
 
@@ -62,10 +63,9 @@ final class LifecycleReducer {
             throw new IllegalStateException("unhandled lifecycle intent: " + i.getClass().getName());
         }
     }
+
     static void createFaction(ReduceSupport s, LifecycleIntent.CreateFaction c) {
-        ReasonCode nameErr = NameRules.validate(c.name(), s.state.factionNames());
-        if (nameErr != null) {
-            s.reject(nameErr);
+        if (s.rejectIf(NameRules.validate(c.name(), s.state.factionNames()))) {
             return;
         }
         int existingOrd = s.memberOrd(c.owner());
@@ -110,14 +110,11 @@ final class LifecycleReducer {
     }
 
     static void renameFaction(ReduceSupport s, LifecycleIntent.RenameFaction c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        ReasonCode fmt = NameRules.validateFormat(c.newName());
-        if (fmt != null) {
-            s.reject(fmt);
+        if (s.rejectIf(NameRules.validateFormat(c.newName()))) {
             return;
         }
         String newFold = NameIndex.fold(c.newName());
@@ -137,9 +134,8 @@ final class LifecycleReducer {
     }
 
     static void setDescription(ReduceSupport s, LifecycleIntent.SetDescription c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         String d = c.description() == null ? "" : c.description();
@@ -152,9 +148,8 @@ final class LifecycleReducer {
     }
 
     static void setMotd(ReduceSupport s, LifecycleIntent.SetMotd c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         String m = c.motd() == null ? "" : c.motd();
@@ -164,9 +159,8 @@ final class LifecycleReducer {
     }
 
     static void transferOwnership(ReduceSupport s, LifecycleIntent.TransferOwnership c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         int newOwnerOrd = s.memberOrd(c.newOwner());
@@ -195,9 +189,7 @@ final class LifecycleReducer {
     }
 
     static void sendMergeRequest(ReduceSupport s, LifecycleIntent.SendMergeRequest c) {
-        ReasonCode err = MergeRules.validateSend(s.state, c.sender(), c.target());
-        if (err != null) {
-            s.reject(err);
+        if (s.rejectIf(MergeRules.validateSend(s.state, c.sender(), c.target()))) {
             return;
         }
         Faction sender = s.resolve(c.sender());
@@ -209,9 +201,7 @@ final class LifecycleReducer {
     }
 
     static void acceptMergeRequest(ReduceSupport s, LifecycleIntent.AcceptMergeRequest c) {
-        ReasonCode err = MergeRules.validateAccept(s.state, c.sender(), c.target());
-        if (err != null) {
-            s.reject(err);
+        if (s.rejectIf(MergeRules.validateAccept(s.state, c.sender(), c.target()))) {
             return;
         }
         s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.CLAIMS, 0, c.actor()));
@@ -225,45 +215,46 @@ final class LifecycleReducer {
         }
         int senderOrd = sender.idx();
         int targetOrd = target.idx();
-        if (c.phase() == PagePhase.CLAIMS) {
-            int moved = s.reassignUpToPageClaims(senderOrd, c.target(), targetOrd);
-            Faction after = s.resolve(c.sender());
-            if (after != null && after.landCount() > 0) {
-                s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.CLAIMS, 0, c.actor()));
-            } else {
-                // reassign warps in one shot (low volume), then members
-                reassignWarps(s, senderOrd, targetOrd);
-                s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.MEMBERS, 0, c.actor()));
+        switch (c.phase()) {
+            case CLAIMS -> {
+                s.reassignUpToPageClaims(senderOrd, c.target(), targetOrd);
+                Faction after = s.resolve(c.sender());
+                if (after != null && after.landCount() > 0) {
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.CLAIMS, 0, c.actor()));
+                } else {
+                    // reassign warps in one shot (low volume), then members
+                    reassignWarps(s, senderOrd, targetOrd);
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.MEMBERS, 0, c.actor()));
+                }
             }
-            if (moved < 0) {
-                return;
+            case MEMBERS -> {
+                int defaultRankIdx = Math.max(0, RoleRules.defaultRankIndex(target.ranks()));
+                int moved = s.migrateMembersPage(senderOrd, c.target(), defaultRankIdx);
+                if (moved == Reducer.PAGE_SIZE && FactionAggregates.memberCount(s.state, c.sender()) > 0) {
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.MEMBERS, 0, c.actor()));
+                } else {
+                    s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.FINAL, 0, c.actor()));
+                }
             }
-        } else if (c.phase() == PagePhase.MEMBERS) {
-            int defaultRankIdx = Math.max(0, RoleRules.defaultRankIndex(target.ranks()));
-            int moved = s.migrateMembersPage(senderOrd, c.target(), defaultRankIdx);
-            if (moved == Reducer.PAGE_SIZE && FactionAggregates.memberCount(s.state, c.sender()) > 0) {
-                s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.MEMBERS, 0, c.actor()));
-            } else {
-                s.continuation(new LifecycleIntent.MergePage(c.sender(), c.target(), PagePhase.FINAL, 0, c.actor()));
+            case FINAL -> {
+                // Final page: move bank, scrub sender, free it, emit MergeCompleted.
+                double bankMoved = MoneyMath.round2(sender.bank());
+                Faction tgt = s.resolve(c.target());
+                if (tgt != null && bankMoved != 0.0) {
+                    s.replaceFaction(FactionEdit.withBank(tgt, MoneyMath.round2(tgt.bank() + bankMoved)));
+                }
+                s.state = s.state.withFactions(DisbandRules.scrubRelations(s.state.factions(), senderOrd));
+                s.state = s.state.withInvites(
+                        s.state.invites().removeIf(in -> in.factionOrdinal() == senderOrd));
+                s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(senderOrd));
+                s.state = s.state.withChests(s.state.chests().removeFaction(senderOrd));
+                s.refundFactionEscrows(senderOrd);
+                s.state = s.state.withFactionNames(s.state.factionNames().without(sender.nameFolded()));
+                s.state = s.state.withFactions(s.state.factions().freed(senderOrd));
+                s.emit(new LifecycleEffect.MergeCompleted(s.seq, s.origin, c.sender(), c.target(), 0, 0,
+                        bankMoved));
+                s.audit(c.target(), c.actor(), FactionAuditAction.MERGE_ACCEPT, sender.name());
             }
-        } else {
-            // Final page: move bank, scrub sender, free it, emit MergeCompleted.
-            double bankMoved = MoneyMath.round2(sender.bank());
-            Faction tgt = s.resolve(c.target());
-            if (tgt != null && bankMoved != 0.0) {
-                s.replaceFaction(FactionEdit.withBank(tgt, MoneyMath.round2(tgt.bank() + bankMoved)));
-            }
-            s.state = s.state.withFactions(DisbandRules.scrubRelations(s.state.factions(), senderOrd));
-            s.state = s.state.withInvites(
-                    s.state.invites().removeIf(in -> in.factionOrdinal() == senderOrd));
-            s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(senderOrd));
-            s.state = s.state.withChests(s.state.chests().removeFaction(senderOrd));
-            s.refundFactionEscrows(senderOrd);
-            s.state = s.state.withFactionNames(s.state.factionNames().without(sender.nameFolded()));
-            s.state = s.state.withFactions(s.state.factions().freed(senderOrd));
-            s.emit(new LifecycleEffect.MergeCompleted(s.seq, s.origin, c.sender(), c.target(), 0, 0,
-                    bankMoved));
-            s.audit(c.target(), c.actor(), FactionAuditAction.MERGE_ACCEPT, sender.name());
         }
     }
 
@@ -276,9 +267,8 @@ final class LifecycleReducer {
     }
 
     static void disbandFaction(ReduceSupport s, LifecycleIntent.DisbandFaction c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.CLAIMS, 0, c.byAdmin(), c.actor()));
@@ -290,35 +280,36 @@ final class LifecycleReducer {
             return; // already gone
         }
         int ord = f.idx();
-        if (c.phase() == PagePhase.CLAIMS) {
-            int removed = s.removeUpToPageClaims(f.idx(), FactionHandle.WILDERNESS);
-            Faction after = s.resolve(c.faction());
-            if (after != null && after.landCount() > 0) {
-                s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.CLAIMS, 0, c.byAdmin(), c.actor()));
-            } else {
-                s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.MEMBERS, 0, c.byAdmin(), c.actor()));
+        switch (c.phase()) {
+            case CLAIMS -> {
+                s.removeUpToPageClaims(f.idx());
+                Faction after = s.resolve(c.faction());
+                if (after != null && after.landCount() > 0) {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.CLAIMS, 0, c.byAdmin(), c.actor()));
+                } else {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.MEMBERS, 0, c.byAdmin(), c.actor()));
+                }
             }
-            if (removed == 0) {
-                // nothing to do this page; fall straight through handled above
+            case MEMBERS -> {
+                int moved = s.clearMembersPage(ord);
+                if (moved == Reducer.PAGE_SIZE && FactionAggregates.memberCount(s.state, c.faction()) > 0) {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.MEMBERS, 0, c.byAdmin(), c.actor()));
+                } else {
+                    s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.FINAL, 0, c.byAdmin(), c.actor()));
+                }
             }
-        } else if (c.phase() == PagePhase.MEMBERS) {
-            int moved = s.clearMembersPage(ord);
-            if (moved == Reducer.PAGE_SIZE && FactionAggregates.memberCount(s.state, c.faction()) > 0) {
-                s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.MEMBERS, 0, c.byAdmin(), c.actor()));
-            } else {
-                s.continuation(new LifecycleIntent.DisbandPage(c.faction(), PagePhase.FINAL, 0, c.byAdmin(), c.actor()));
+            case FINAL -> {
+                // Final page: scrub inbound references, release name, free ordinal (generation bump LAST).
+                s.state = s.state.withFactions(DisbandRules.scrubRelations(s.state.factions(), ord));
+                s.state = s.state.withInvites(s.state.invites().removeIf(in -> in.factionOrdinal() == ord));
+                s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(ord));
+                s.state = s.state.withWarps(s.state.warps().removeFaction(ord));
+                s.state = s.state.withChests(s.state.chests().removeFaction(ord));
+                s.refundFactionEscrows(ord);
+                s.state = s.state.withFactionNames(s.state.factionNames().without(f.nameFolded()));
+                s.state = s.state.withFactions(s.state.factions().freed(ord));
+                s.emit(new LifecycleEffect.FactionDisbanded(s.seq, s.origin, c.faction(), f.name()));
             }
-        } else {
-            // Final page: scrub inbound references, release name, free ordinal (generation bump LAST).
-            s.state = s.state.withFactions(DisbandRules.scrubRelations(s.state.factions(), ord));
-            s.state = s.state.withInvites(s.state.invites().removeIf(in -> in.factionOrdinal() == ord));
-            s.state = s.state.withMergeRequests(s.state.mergeRequests().removeInvolving(ord));
-            s.state = s.state.withWarps(s.state.warps().removeFaction(ord));
-            s.state = s.state.withChests(s.state.chests().removeFaction(ord));
-            s.refundFactionEscrows(ord);
-            s.state = s.state.withFactionNames(s.state.factionNames().without(f.nameFolded()));
-            s.state = s.state.withFactions(s.state.factions().freed(ord));
-            s.emit(new LifecycleEffect.FactionDisbanded(s.seq, s.origin, c.faction(), f.name()));
         }
     }
 }

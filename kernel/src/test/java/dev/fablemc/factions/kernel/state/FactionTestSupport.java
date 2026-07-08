@@ -2,7 +2,12 @@ package dev.fablemc.factions.kernel.state;
 
 import java.util.UUID;
 
-/** Shared builders for minimal state values in kernel structure tests. */
+/**
+ * Shared builders for minimal state values in kernel structure tests.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 final class FactionTestSupport {
 
     private FactionTestSupport() {

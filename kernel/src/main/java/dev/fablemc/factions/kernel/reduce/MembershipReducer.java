@@ -14,12 +14,13 @@ import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.InviteRemovalReason;
 
 /**
- * Membership and invite intents: join / leave / kick / invite send-revoke-decline.
+ * Reduces the membership and invite intents: join / leave / kick / invite send-revoke-decline.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class MembershipReducer {
 
@@ -45,10 +46,10 @@ final class MembershipReducer {
             throw new IllegalStateException("unhandled membership intent: " + i.getClass().getName());
         }
     }
+
     static void joinFaction(ReduceSupport s, MembershipIntent.JoinFaction c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         int ord = s.memberOrd(c.player());
@@ -106,23 +107,20 @@ final class MembershipReducer {
     }
 
     static void kickMember(ReduceSupport s, MembershipIntent.KickMember c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (c.actor().equals(c.target())) {
             s.reject(ReasonCode.CANNOT_KICK_SELF);
             return;
         }
-        int actorOrd = s.memberOrd(c.actor());
-        int targetOrd = s.memberOrd(c.target());
-        if (actorOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(actorOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_IN_FACTION);
+        int actorOrd = s.memberOfOrReject(c.actor(), f.idx(), ReasonCode.NOT_IN_FACTION);
+        if (actorOrd < 0) {
             return;
         }
-        if (targetOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(targetOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_MEMBER);
+        int targetOrd = s.memberOfOrReject(c.target(), f.idx(), ReasonCode.NOT_MEMBER);
+        if (targetOrd < 0) {
             return;
         }
         if (c.target().equals(f.ownerId())) {
@@ -142,14 +140,12 @@ final class MembershipReducer {
     }
 
     static void sendInvite(ReduceSupport s, MembershipIntent.SendInvite c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        int inviterOrd = s.memberOrd(c.inviter());
-        if (inviterOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(inviterOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_IN_FACTION);
+        int inviterOrd = s.memberOfOrReject(c.inviter(), f.idx(), ReasonCode.NOT_IN_FACTION);
+        if (inviterOrd < 0) {
             return;
         }
         Rank inviterRank = s.rankOf(f, inviterOrd);
@@ -169,9 +165,8 @@ final class MembershipReducer {
     }
 
     static void revokeInvite(ReduceSupport s, MembershipIntent.RevokeInvite c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         InviteTable.Invite in = s.state.invites().find(f.idx(), c.invitee());

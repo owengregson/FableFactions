@@ -1,5 +1,7 @@
 package dev.fablemc.factions.kernel.state;
 
+import java.util.Locale;
+
 /**
  * A faction rank (built-in or custom).
  *
@@ -48,7 +50,7 @@ public record Rank(String id, String name, String prefix, int priority) {
         if (name == null) {
             return false;
         }
-        String n = name.trim().toLowerCase(java.util.Locale.ROOT);
+        String n = name.trim().toLowerCase(Locale.ROOT);
         return n.equals(NAME_OWNER) || n.equals(NAME_OFFICER) || n.equals(NAME_MEMBER);
     }
 }

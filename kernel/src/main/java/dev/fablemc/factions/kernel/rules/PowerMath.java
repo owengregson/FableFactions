@@ -6,8 +6,8 @@ import dev.fablemc.factions.kernel.vocab.PowerSource;
 
 /**
  * The power pipeline: transcription of the reference {@code PowerServiceImpl.apply} plus the
- * death-streak / kill-scale / lazy-accrual math (pvp-services.md §5, pvp-engines.md §3.7,
- * pvp-bugs-concurrency Appendix). Pure static functions, unit-pinned per formula.
+ * death-streak / kill-scale / lazy-accrual math (ref-services.md §5, ref-engines.md §3.7,
+ * ref-bugs-concurrency Appendix). Pure static functions, unit-pinned per formula.
  *
  * <p><b>Owning thread(s):</b> the reducer's power branches; {@link #settle} also mirrors
  * {@code KernelSnapshot.powerAt}. <b>Mutability:</b> stateless. <b>Reducer rule:</b> power is a

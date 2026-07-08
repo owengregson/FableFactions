@@ -7,12 +7,13 @@ import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.FactionArena;
 
 /**
- * System intents: config swap and retag (paged) / predefined seed marker / baseline import marker.
+ * Reduces the system intents: config swap and retag (paged) / predefined seed marker / baseline import marker.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class SystemReducer {
 
@@ -32,6 +33,7 @@ final class SystemReducer {
             throw new IllegalStateException("unhandled system intent: " + i.getClass().getName());
         }
     }
+
     static void swapConfig(ReduceSupport s, SystemIntent.SwapConfig c) {
         s.state = s.state.withConfig(c.config());
         s.emit(new SystemEffect.ConfigSwapped(s.seq, s.origin, "reload"));
@@ -40,10 +42,10 @@ final class SystemReducer {
 
     static void retagPage(ReduceSupport s, int cursor) {
         FactionArena arena = s.state.factions();
-        int hw = arena.highWater();
+        int highWater = arena.highWater();
         int processed = 0;
         int ord = cursor;
-        for (; ord < hw && processed < Reducer.PAGE_SIZE; ord++) {
+        for (; ord < highWater && processed < Reducer.PAGE_SIZE; ord++) {
             Faction f = arena.at(ord);
             if (f == null || !f.isNormal()) {
                 continue;
@@ -56,7 +58,7 @@ final class SystemReducer {
                 arena = s.state.factions();
             }
         }
-        if (ord < hw) {
+        if (ord < highWater) {
             s.continuation(new SystemIntent.RetagPage(ord));
         }
     }

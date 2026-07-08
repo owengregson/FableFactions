@@ -12,14 +12,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Reducer;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
 
 /**
  * The single {@code fable-kernel} writer (proposal-C §3.2, AM-9). It parks until signalled,

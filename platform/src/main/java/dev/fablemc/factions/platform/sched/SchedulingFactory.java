@@ -1,9 +1,9 @@
 package dev.fablemc.factions.platform.sched;
 
-import dev.fablemc.factions.platform.probe.Capabilities;
-import dev.fablemc.factions.platform.probe.CompatClass;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.probe.Capabilities;
+import dev.fablemc.factions.platform.probe.CompatClass;
 
 /**
  * Chooses the scheduling backend for this server (CONTRACTS §3, AM-12).
@@ -22,9 +22,6 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class SchedulingFactory {
 
-    /** The compat-folia backend, loaded reflectively so plain Paper never links it. */
-    private static final String FOLIA_IMPL = CompatClass.FOLIA_SCHEDULING.fqn();
-
     private SchedulingFactory() {}
 
     public static @NotNull Scheduling create(@NotNull Plugin plugin, @NotNull Capabilities capabilities) {
@@ -33,9 +30,7 @@ public final class SchedulingFactory {
             return new BukkitScheduling(plugin);
         }
         try {
-            return (Scheduling) Class.forName(FOLIA_IMPL)
-                    .getDeclaredConstructor(Plugin.class)
-                    .newInstance(plugin);
+            return CompatClass.FOLIA_SCHEDULING.instance(Scheduling.class, Plugin.class, plugin);
         } catch (ReflectiveOperationException | LinkageError failure) {
             // On Folia the Bukkit scheduler would hard-throw anyway; surface the real problem loudly.
             throw new IllegalStateException(

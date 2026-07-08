@@ -16,7 +16,7 @@ public interface SqlDialect {
 
     /**
      * The explicit JDBC driver class name — shaded/relocated first, canonical fallback (per
-     * pvp-data §6): the SPI service file is stripped from the shaded jar so Hikari must be told.
+     * ref-data §6): the SPI service file is stripped from the shaded jar so Hikari must be told.
      */
     String driverClassName();
 
@@ -66,5 +66,18 @@ public interface SqlDialect {
             sb.append('?');
         }
         return sb.toString();
+    }
+
+    /**
+     * {@code true} if {@code fqn} is loadable (without initializing it) — the dialects' probe for
+     * the shaded/relocated driver class before falling back to the canonical name (ref-data §6).
+     */
+    static boolean classPresent(String fqn) {
+        try {
+            Class.forName(fqn, false, SqlDialect.class.getClassLoader());
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 }

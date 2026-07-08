@@ -37,7 +37,12 @@ import dev.fablemc.factions.kernel.vocab.ClaimMode;
 import dev.fablemc.factions.kernel.vocab.PowerSource;
 import dev.fablemc.factions.kernel.vocab.Relation;
 
-/** Targeted behavioural pins for the reducer's membership / role / relation / claim / power paths. */
+/**
+ * Targeted behavioural pins for the reducer's membership / role / relation / claim / power paths.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class ReducerScenarioTest {
 
     // ── lifecycle & naming ─────────────────────────────────────────────────────────────────

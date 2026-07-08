@@ -46,6 +46,16 @@ public final class OptionalSince<T> implements ManifestEntry {
         return new OptionalSince<>(name, since, fallback, fallbackNote, resolver.get());
     }
 
+    /**
+     * A boot-resolved capability FLAG: present iff {@code flag}, with the declared
+     * {@code false} fallback every flag entry shares — the manifest reads as one
+     * declaration per line instead of a boxed-supplier dance.
+     */
+    public static @NotNull OptionalSince<Boolean> flag(
+            @NotNull String name, @NotNull String since, @NotNull String fallbackNote, boolean flag) {
+        return new OptionalSince<>(name, since, Boolean.FALSE, fallbackNote, flag ? Boolean.TRUE : null);
+    }
+
     @Override
     public @NotNull String name() {
         return name;

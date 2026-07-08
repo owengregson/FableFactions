@@ -8,7 +8,7 @@ package dev.fablemc.factions.kernel.vocab;
  * reducer; storage projects {@link #id()} verbatim.
  *
  * <p>Ids are lower-kebab and are the {@code --action=} filter tokens shown to admins
- * (pvp-services.md §1.3, pvp-commands-admin.md §2.10). {@link #validIds()} renders the
+ * (ref-services.md §1.3, ref-commands-admin.md §2.10). {@link #validIds()} renders the
  * comma-joined list used in "unknown action" errors.
  */
 public enum FactionAuditAction {

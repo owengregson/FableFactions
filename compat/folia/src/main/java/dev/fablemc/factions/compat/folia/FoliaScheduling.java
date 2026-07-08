@@ -1,16 +1,16 @@
 package dev.fablemc.factions.compat.folia;
 
-import dev.fablemc.factions.platform.sched.Scheduling;
-import dev.fablemc.factions.platform.sched.TaskHandle;
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.sched.Scheduling;
+import dev.fablemc.factions.platform.sched.TaskHandle;
 
 /**
  * Region-aware {@link Scheduling} for Folia (CONTRACTS §3, AM-12; adapted from Mental's
@@ -122,6 +122,7 @@ public final class FoliaScheduling implements Scheduling {
         return Math.max(1, ticks);
     }
 
+    /** Cancellation over a live Folia {@code ScheduledTask}. */
     private record FoliaHandle(@NotNull ScheduledTask task) implements TaskHandle {
 
         @Override
@@ -135,6 +136,7 @@ public final class FoliaScheduling implements Scheduling {
         }
     }
 
+    /** The no-op handle for a repeat whose entity had already retired at schedule time. */
     private enum RetiredHandle implements TaskHandle {
         INSTANCE;
 

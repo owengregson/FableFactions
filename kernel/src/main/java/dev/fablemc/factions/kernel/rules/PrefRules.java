@@ -3,7 +3,7 @@ package dev.fablemc.factions.kernel.rules;
 import dev.fablemc.factions.kernel.state.PlayerLedger;
 
 /**
- * Per-player preference bit / auto-mode / locale helpers (pvp-commands-misc.md prefs).
+ * Per-player preference bit / auto-mode / locale helpers (ref-commands-misc.md prefs).
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
  * the reducer edits the packed {@code prefsBits} through {@link PlayerLedger#withPref}/

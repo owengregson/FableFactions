@@ -7,7 +7,7 @@ package dev.fablemc.factions.kernel.config;
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.
  *
- * <p>Max land = {@code min(land.max, floor(totalMemberPower * land.per-power))} (pvp-services.md
+ * <p>Max land = {@code min(land.max, floor(totalMemberPower * land.per-power))} (ref-services.md
  * §6.2). {@code bufferZone} is a reference-dead knob wired here (D-1) with a behavior-preserving
  * default of 0. Shield windows are UTC hours; {@code shieldMaxDurationHours} caps a single
  * {@code /fa shield} assignment.

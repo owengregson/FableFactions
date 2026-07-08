@@ -14,6 +14,9 @@ import dev.fablemc.factions.kernel.vocab.EscrowKind;
  * Conservation bookkeeping for {@link EscrowTable}: the invariant
  * {@code wallet + bank + openEscrowTotal == constant} holds across every open/settle transition
  * (deposit, withdraw, and refund-on-failure).
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 class EscrowTableTest {
 

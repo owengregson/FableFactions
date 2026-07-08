@@ -10,7 +10,7 @@ import java.util.List;
  * The relational projection DDL (proposal-C §6.2). Identical across H2 and MySQL — only the
  * upsert shape (in {@link SqlDialect}) differs. All 12 reference-parity tables are created,
  * including {@code merge_requests} (the reference registered but never created it — bug fixed,
- * pvp-data §3.12), plus the FableFactions control tables {@code ff_meta}, {@code ff_escrows},
+ * ref-data §3.12), plus the FableFactions control tables {@code ff_meta}, {@code ff_escrows},
  * {@code ff_blobs}.
  *
  * <p>Deliberate deviations from the reference schema (proposal-C §6.2):

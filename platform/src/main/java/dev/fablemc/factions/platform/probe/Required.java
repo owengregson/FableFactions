@@ -37,10 +37,20 @@ public final class Required<T> implements ManifestEntry {
         return new Required<>(name, owner, resolver.get());
     }
 
+    /** A required boolean fact: present iff {@code fact}; {@code false} disables feature {@code owner}. */
+    public static @NotNull Required<Boolean> owned(@NotNull String name, @NotNull String owner, boolean fact) {
+        return new Required<>(name, owner, fact ? Boolean.TRUE : null);
+    }
+
     /** Resolve now; a {@code null} result fails the boot (engine-critical, no owner). */
     public static <T> @NotNull Required<T> engineCritical(
             @NotNull String name, @NotNull Supplier<@Nullable T> resolver) {
         return new Required<>(name, null, resolver.get());
+    }
+
+    /** A required boolean fact whose absence fails the boot: present iff {@code fact}. */
+    public static @NotNull Required<Boolean> engineCritical(@NotNull String name, boolean fact) {
+        return new Required<>(name, null, fact ? Boolean.TRUE : null);
     }
 
     @Override

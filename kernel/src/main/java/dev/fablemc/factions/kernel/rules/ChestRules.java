@@ -5,7 +5,7 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.state.ChestTable;
 
 /**
- * Team-chest validation (pvp-services.md §7.9, pvp-commands-misc.md chest). Pure static helpers.
+ * Team-chest validation (ref-services.md §7.9, ref-commands-misc.md chest). Pure static helpers.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
  * a content commit is guarded by a session nonce so a stale open session cannot overwrite newer
@@ -21,12 +21,12 @@ public final class ChestRules {
     public static final int CHEST_SIZE = 54;
 
     /** {@code null} when {@code faction} may create a new chest named {@code name}. */
-    public static ReasonCode validateCreate(ConfigImage cfg, ChestTable chests, int factionOrdinal,
+    public static ReasonCode validateCreate(ConfigImage config, ChestTable chests, int factionOrdinal,
                                             String name) {
         if (name == null || name.trim().isEmpty()) {
             return ReasonCode.INVALID_AMOUNT;
         }
-        int max = cfg.limits().maxTeamChests();
+        int max = config.limits().maxTeamChests();
         if (max > 0 && chests.countForFaction(factionOrdinal) >= max
                 && chests.get(factionOrdinal, name) == null) {
             return ReasonCode.WARP_LIMIT_REACHED;

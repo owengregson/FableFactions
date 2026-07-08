@@ -18,21 +18,17 @@ public final class MemberProjection {
     public static void apply(ProjectionContext ctx, MembershipEffect.MemberJoined x) {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
-            ctx.add(new ProjectionOp(ctx.dialect().upsert("players",
-                    new String[] {"id", "faction_id"}, new String[] {"id"}),
-                    new Object[] {x.player().toString(), fid}));
+            ctx.upsertById("players", new String[] {"id", "faction_id"}, x.player().toString(), fid);
         }
     }
 
     public static void apply(ProjectionContext ctx, MembershipEffect.MemberLeft x) {
-        ctx.add(new ProjectionOp("UPDATE `players` SET `faction_id`=NULL, `rank_id`=NULL WHERE `id`=?",
-                new Object[] {x.player().toString()}));
+        ctx.op("UPDATE `players` SET `faction_id`=NULL, `rank_id`=NULL WHERE `id`=?",
+                x.player().toString());
     }
 
     public static void apply(ProjectionContext ctx, PrefEffect.LocaleChanged x) {
-        ctx.add(new ProjectionOp(ctx.dialect().upsert("players",
-                new String[] {"id", "locale"}, new String[] {"id"}),
-                new Object[] {x.player().toString(), localeName(x.localeIdx())}));
+        ctx.playerUpsert(x.player(), "locale", localeName(x.localeIdx()));
     }
 
     public static void apply(ProjectionContext ctx, PrefEffect.AutoModeChanged x) {

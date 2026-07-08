@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed {@code factions.power.*} configuration (pvp-resources.md §1.3, pvp-services.md §5).
+ * Typed {@code factions.power.*} configuration (ref-resources.md §1.3, ref-services.md §5).
  *
  * <p><b>Owning thread(s):</b> parsed off-thread in {@code :core}, published as part of the
  * immutable snapshot; read on any thread. <b>Mutability:</b> immutable value. <b>Reducer

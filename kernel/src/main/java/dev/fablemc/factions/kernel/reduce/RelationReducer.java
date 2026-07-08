@@ -2,7 +2,6 @@ package dev.fablemc.factions.kernel.reduce;
 
 import dev.fablemc.factions.kernel.effect.FeedbackEffect;
 import dev.fablemc.factions.kernel.effect.RelationEffect;
-import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.RelationIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
@@ -17,12 +16,13 @@ import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.Relation;
 
 /**
- * Relation intents: declare wish / effective relation between two factions.
+ * Reduces the relation intents: declare wish / effective relation between two factions.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class RelationReducer {
 
@@ -36,24 +36,26 @@ final class RelationReducer {
             throw new IllegalStateException("unhandled relation intent: " + i.getClass().getName());
         }
     }
+
     static void declareRelation(ReduceSupport s, RelationIntent.DeclareRelation c) {
         if (!RelationRules.isValidFactionRelation(c.kind().code())) {
             s.reject(ReasonCode.RELATION_SET_FAILED);
             return;
         }
-        Faction a = s.resolve(c.actorFaction());
-        Faction b = s.resolve(c.targetFaction());
-        if (a == null || b == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
+        Faction a = s.factionOrReject(c.actorFaction());
+        if (a == null) {
+            return;
+        }
+        Faction b = s.factionOrReject(c.targetFaction());
+        if (b == null) {
             return;
         }
         if (a.idx() == b.idx()) {
             s.reject(ReasonCode.RELATION_SELF);
             return;
         }
-        int actorOrd = s.memberOrd(c.actor());
-        if (actorOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(actorOrd)) != a.idx()) {
-            s.reject(ReasonCode.NOT_IN_FACTION);
+        int actorOrd = s.memberOfOrReject(c.actor(), a.idx(), ReasonCode.NOT_IN_FACTION);
+        if (actorOrd < 0) {
             return;
         }
         Rank actorRank = s.rankOf(a, actorOrd);

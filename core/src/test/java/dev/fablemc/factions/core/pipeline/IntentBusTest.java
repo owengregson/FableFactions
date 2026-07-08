@@ -10,13 +10,13 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
-import dev.fablemc.factions.kernel.intent.SystemIntent;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
 import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
+import dev.fablemc.factions.kernel.intent.SystemIntent;
 
 /**
  * The MPSC bus contract (work order W2b §3): the bounded player lane answers

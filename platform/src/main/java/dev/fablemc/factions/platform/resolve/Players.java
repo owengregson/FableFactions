@@ -1,7 +1,6 @@
 package dev.fablemc.factions.platform.resolve;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.Arrays;
 import java.util.Collection;
@@ -11,6 +10,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * The one online-players accessor (CONTRACTS §3, version-deltas Risk #1). Bridges the
@@ -33,30 +33,14 @@ public final class Players {
     private static final @Nullable MethodHandle GET_BY_UUID;
 
     static {
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-        MethodHandle online = null;
-        boolean collection = true;
-        try {
-            online = lookup.findStatic(Bukkit.class, "getOnlinePlayers", MethodType.methodType(Collection.class));
-            collection = true;
-        } catch (ReflectiveOperationException | LinkageError modernAbsent) {
-            try {
-                online = lookup.findStatic(Bukkit.class, "getOnlinePlayers", MethodType.methodType(Player[].class));
-                collection = false;
-            } catch (ReflectiveOperationException | LinkageError legacyAbsent) {
-                online = null;
-            }
-        }
-        ONLINE = online;
-        ONLINE_IS_COLLECTION = collection;
-
-        MethodHandle byUuid = null;
-        try {
-            byUuid = lookup.findStatic(Bukkit.class, "getPlayer", MethodType.methodType(Player.class, UUID.class));
-        } catch (ReflectiveOperationException | LinkageError absent) {
-            byUuid = null; // pre-UUID-accessor builds: linear scan fallback
-        }
-        GET_BY_UUID = byUuid;
+        MethodHandle modern = Probes.staticHandle(
+                Bukkit.class, "getOnlinePlayers", MethodType.methodType(Collection.class));
+        ONLINE_IS_COLLECTION = modern != null;
+        ONLINE = modern != null ? modern : Probes.staticHandle(
+                Bukkit.class, "getOnlinePlayers", MethodType.methodType(Player[].class));
+        // Absent on pre-UUID-accessor builds: the linear scan fallback in get(UUID).
+        GET_BY_UUID = Probes.staticHandle(
+                Bukkit.class, "getPlayer", MethodType.methodType(Player.class, UUID.class));
     }
 
     private Players() {}

@@ -19,6 +19,9 @@ import java.lang.annotation.Target;
  *
  * <p>{@link #capability()} names the {@code Capabilities} boolean that gates the
  * registration (e.g. {@code "blockExplode"}, {@code "armorStands"}).
+ *
+ * <p>Owning thread(s): none — a compile-time marker read by the build gate.
+ * Mutability class: stateless annotation.
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)

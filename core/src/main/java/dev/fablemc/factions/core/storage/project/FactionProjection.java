@@ -20,16 +20,15 @@ public final class FactionProjection {
 
     public static void apply(ProjectionContext ctx, LifecycleEffect.FactionCreated x) {
         ctx.putFaction(x.faction(), x.id().toString());
-        ctx.add(new ProjectionOp(ctx.dialect().upsert("factions",
-                new String[] {"id", "name", "name_folded"}, new String[] {"id"}),
-                new Object[] {x.id().toString(), x.name(), NameIndex.fold(x.name())}));
+        ctx.upsertById("factions", new String[] {"id", "name", "name_folded"},
+                x.id().toString(), x.name(), NameIndex.fold(x.name()));
     }
 
     public static void apply(ProjectionContext ctx, LifecycleEffect.FactionRenamed x) {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
-            ctx.add(new ProjectionOp("UPDATE `factions` SET `name`=?, `name_folded`=? WHERE `id`=?",
-                    new Object[] {x.newName(), NameIndex.fold(x.newName()), fid}));
+            ctx.op("UPDATE `factions` SET `name`=?, `name_folded`=? WHERE `id`=?",
+                    x.newName(), NameIndex.fold(x.newName()), fid);
         }
     }
 
@@ -53,9 +52,8 @@ public final class FactionProjection {
     public static void apply(ProjectionContext ctx, PrefEffect.ShieldChanged x) {
         String fid = ctx.factionId(x.faction());
         if (fid != null) {
-            ctx.add(new ProjectionOp("UPDATE `factions` SET `shield_start_hour`=?, "
-                    + "`shield_duration_hours`=? WHERE `id`=?",
-                    new Object[] {x.startHour(), x.durationHours(), fid}));
+            ctx.op("UPDATE `factions` SET `shield_start_hour`=?, `shield_duration_hours`=? "
+                    + "WHERE `id`=?", x.startHour(), x.durationHours(), fid);
         }
     }
 
@@ -70,37 +68,27 @@ public final class FactionProjection {
         String s = ctx.factionId(x.sender());
         String t = ctx.factionId(x.target());
         if (s != null && t != null) {
-            ctx.add(new ProjectionOp(ctx.dialect().upsert("merge_requests",
-                    new String[] {"id", "sender_faction_id", "target_faction_id", "actor_id",
-                            "created_at"}, new String[] {"id"}),
-                    new Object[] {ctx.ledgerId(x.seq()), s, t, s, ctx.now()}));
+            ctx.upsertById("merge_requests", new String[] {"id", "sender_faction_id",
+                    "target_faction_id", "actor_id", "created_at"},
+                    ctx.ledgerId(x.seq()), s, t, s, ctx.now());
         }
     }
 
     public static void apply(ProjectionContext ctx, LifecycleEffect.MergeCompleted x) {
         String s = ctx.factionId(x.sender());
         if (s != null) {
-            ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("merge_requests",
-                    "sender_faction_id"), new Object[] {s}));
+            ctx.deleteBy("merge_requests", "sender_faction_id", s);
         }
     }
 
     private static void disbandCascade(ProjectionContext ctx, String fid) {
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("board", "faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("warps", "faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("ranks", "faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("team_chests", "faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("invitations", "faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("merge_requests", "sender_faction_id"),
-                new Object[] {fid}));
-        ctx.add(new ProjectionOp("UPDATE `players` SET `faction_id`=NULL, `rank_id`=NULL "
-                + "WHERE `faction_id`=?", new Object[] {fid}));
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("factions", "id"),
-                new Object[] {fid}));
+        ctx.deleteBy("board", "faction_id", fid);
+        ctx.deleteBy("warps", "faction_id", fid);
+        ctx.deleteBy("ranks", "faction_id", fid);
+        ctx.deleteBy("team_chests", "faction_id", fid);
+        ctx.deleteBy("invitations", "faction_id", fid);
+        ctx.deleteBy("merge_requests", "sender_faction_id", fid);
+        ctx.op("UPDATE `players` SET `faction_id`=NULL, `rank_id`=NULL WHERE `faction_id`=?", fid);
+        ctx.deleteBy("factions", "id", fid);
     }
 }

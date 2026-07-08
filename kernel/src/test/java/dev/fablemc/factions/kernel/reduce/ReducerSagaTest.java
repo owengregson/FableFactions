@@ -32,7 +32,12 @@ import dev.fablemc.factions.kernel.vocab.ClaimMode;
 import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
 import dev.fablemc.factions.kernel.vocab.Relation;
 
-/** Saga-level pins: economy/escrow (AM-7), tax, zones, disband scrub (AM-6), merge, AM-5 paging. */
+/**
+ * Saga-level pins: economy/escrow (AM-7), tax, zones, disband scrub (AM-6), merge, AM-5 paging.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class ReducerSagaTest {
 
     // ── economy: deposit / withdraw / escrow settle (AM-7) ─────────────────────────────────

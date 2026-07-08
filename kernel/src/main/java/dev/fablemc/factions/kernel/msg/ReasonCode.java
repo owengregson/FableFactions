@@ -9,7 +9,7 @@ package dev.fablemc.factions.kernel.msg;
  * renders {@link #messageKey()} with the effect's args.
  *
  * <p>The mapping below is normative: each constant's {@link #messageKey()} is the exact
- * reference message-catalog key (pvp-resources.md §9) whose default English string the user
+ * reference message-catalog key (ref-resources.md §9) whose default English string the user
  * sees. Pre-validation (proposal-C §3.7) runs the same rule functions and must surface the
  * same key, so a lost TOCTOU race and a pre-checked failure read identically.
  */
@@ -175,19 +175,14 @@ public enum ReasonCode {
     /** {@code custom.fly.disabled-global} — fly globally disabled. */
     FLY_DISABLED_GLOBAL("custom.fly.disabled-global");
 
-    private final String messageKeyString;
+    private final MessageKey messageKey;
 
-    ReasonCode(String messageKeyString) {
-        this.messageKeyString = messageKeyString;
+    ReasonCode(String messageKey) {
+        this.messageKey = MessageKey.of(messageKey);
     }
 
-    /** The interned message-catalog key this rejection maps to (1:1). */
+    /** The message-catalog key this rejection maps to (1:1), interned once at class initialization. */
     public MessageKey messageKey() {
-        return MessageKey.of(messageKeyString);
-    }
-
-    /** The raw message-catalog key string. */
-    public String messageKeyString() {
-        return messageKeyString;
+        return messageKey;
     }
 }

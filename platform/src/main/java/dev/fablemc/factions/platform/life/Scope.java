@@ -1,6 +1,5 @@
 package dev.fablemc.factions.platform.life;
 
-import dev.fablemc.factions.platform.sched.TaskHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -9,6 +8,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.sched.TaskHandle;
 
 /**
  * Every resource a subsystem acquires, closed as a unit on any exit (Mental pattern,
@@ -34,23 +34,23 @@ public final class Scope implements AutoCloseable {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
     }
 
-    /** Registers {@code l} for events and tracks it; unregistered in {@link #close()}. */
-    public void listen(@NotNull Listener l) {
-        Objects.requireNonNull(l, "listener");
-        Bukkit.getPluginManager().registerEvents(l, plugin);
-        registrations.add(() -> HandlerList.unregisterAll(l));
+    /** Registers {@code listener} for events and tracks it; unregistered in {@link #close()}. */
+    public void listen(@NotNull Listener listener) {
+        Objects.requireNonNull(listener, "listener");
+        Bukkit.getPluginManager().registerEvents(listener, plugin);
+        registrations.add(() -> HandlerList.unregisterAll(listener));
     }
 
     /** Tracks a repeating task; cancelled in {@link #close()}. */
-    public void task(@NotNull TaskHandle h) {
-        Objects.requireNonNull(h, "handle");
-        registrations.add(h::cancel);
+    public void task(@NotNull TaskHandle handle) {
+        Objects.requireNonNull(handle, "handle");
+        registrations.add(handle::cancel);
     }
 
     /** Tracks an arbitrary closeable; closed in {@link #close()}. */
-    public void closeable(@NotNull AutoCloseable c) {
-        Objects.requireNonNull(c, "closeable");
-        registrations.add(c);
+    public void closeable(@NotNull AutoCloseable closeable) {
+        Objects.requireNonNull(closeable, "closeable");
+        registrations.add(closeable);
     }
 
     @Override

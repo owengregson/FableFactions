@@ -2,6 +2,7 @@ package dev.fablemc.factions.kernel.state;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
@@ -286,6 +287,8 @@ public final class ClaimAtlas {
      * freezes each region into a load-≤0.6 {@link RegionTable} in one pass.
      */
     public static final class Builder {
+        // Boxed keys are fine here: the builder runs once, single-threaded, before first publish
+        // (boot baseline load) — never on the ownerAt probe path.
         private final HashMap<Integer, HashMap<Long, RegionTable.Builder>> byWorld = new HashMap<>();
         private int total;
 
@@ -316,11 +319,11 @@ public final class ClaimAtlas {
                 return EMPTY;
             }
             RegionMap[] worlds = new RegionMap[maxWorld + 1];
-            for (java.util.Map.Entry<Integer, HashMap<Long, RegionTable.Builder>> e
+            for (Map.Entry<Integer, HashMap<Long, RegionTable.Builder>> e
                     : byWorld.entrySet()) {
                 HashMap<Long, RegionTable.Builder> regions = e.getValue();
                 RegionMap rm = RegionMap.EMPTY;
-                for (java.util.Map.Entry<Long, RegionTable.Builder> re : regions.entrySet()) {
+                for (Map.Entry<Long, RegionTable.Builder> re : regions.entrySet()) {
                     RegionTable t = re.getValue().build();
                     if (t.size() > 0) {
                         rm = rm.withRegion(re.getKey(), t);

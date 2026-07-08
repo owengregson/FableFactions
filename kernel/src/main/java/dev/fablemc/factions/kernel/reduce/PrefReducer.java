@@ -9,12 +9,13 @@ import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.PlayerLedger;
 
 /**
- * Preference and flag intents: faction flags / notify-locale-autoterritory-titles-fly-overriding player prefs / shield.
+ * Reduces the preference and flag intents: faction flags / notify-locale-autoterritory-titles-fly-overriding player prefs / shield.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class PrefReducer {
 
@@ -44,10 +45,10 @@ final class PrefReducer {
             throw new IllegalStateException("unhandled pref intent: " + i.getClass().getName());
         }
     }
+
     static void setFactionFlag(ReduceSupport s, PrefIntent.SetFactionFlag c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (c.flag() < 0 || c.flag() >= Faction.FLAG_COUNT) {
@@ -118,9 +119,8 @@ final class PrefReducer {
     }
 
     static void setShield(ReduceSupport s, PrefIntent.SetShield c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (!s.state.config().land().warShieldEnabled()) {
@@ -142,9 +142,8 @@ final class PrefReducer {
     }
 
     static void clearShield(ReduceSupport s, PrefIntent.ClearShield c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         s.replaceFaction(FactionEdit.withShield(f, Faction.NO_SHIELD, 0));

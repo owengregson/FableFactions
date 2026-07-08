@@ -9,7 +9,12 @@ import org.junit.jupiter.api.Test;
 
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 
-/** Allocation, free-list reuse, and — the load-bearing case — generation-mismatch scrubbing. */
+/**
+ * Allocation, free-list reuse, and — the load-bearing case — generation-mismatch scrubbing.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class FactionArenaTest {
 
     @Test

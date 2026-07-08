@@ -10,11 +10,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.intent.PowerIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
 
 /**
  * The MPSC intent queue feeding the single writer (proposal-C §3.2, §3.5). Two lanes:

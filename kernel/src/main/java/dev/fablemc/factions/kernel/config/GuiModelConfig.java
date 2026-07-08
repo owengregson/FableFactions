@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed top-level {@code gui.yml} configuration (pvp-resources.md §8).
+ * Typed top-level {@code gui.yml} configuration (ref-resources.md §8).
  *
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.

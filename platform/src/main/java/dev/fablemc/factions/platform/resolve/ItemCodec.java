@@ -5,11 +5,11 @@ import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
-import dev.fablemc.factions.platform.probe.CompatClass;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.CompatClass;
 
 /**
  * Version-tagged item persistence (CONTRACTS §3, version-deltas Risk #9). Every stored
@@ -29,9 +29,6 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class ItemCodec {
 
-    /** The compat-modern byte codec, loaded by FQN only behind the serializeAsBytes probe. */
-    private static final String MODERN_IMPL = CompatClass.MODERN_ITEM_CODEC.fqn();
-
     private static final String TAG_LEGACY = "FF1";
     private static final String TAG_MODERN = "FF2";
 
@@ -46,16 +43,15 @@ public final class ItemCodec {
 
     /**
      * Builds the codec for this server. When {@code serializeAsBytes} is true, the modern
-     * byte delegate is loaded by FQN; if that fails (or the capability is false), the
-     * legacy Bukkit-serialization path is used.
+     * byte delegate is loaded via {@link CompatClass#MODERN_ITEM_CODEC}; if that fails (or
+     * the capability is false), the legacy Bukkit-serialization path is used.
      */
     public static @NotNull ItemCodec create(boolean serializeAsBytes) {
         if (!serializeAsBytes) {
             return new ItemCodec(null);
         }
         try {
-            Object impl = Class.forName(MODERN_IMPL).getDeclaredConstructor().newInstance();
-            return new ItemCodec((ItemBytesCodec) impl);
+            return new ItemCodec(CompatClass.MODERN_ITEM_CODEC.instance(ItemBytesCodec.class));
         } catch (ReflectiveOperationException | LinkageError | ClassCastException failure) {
             // Modern probe said yes but the delegate would not load — degrade to legacy loudly at boot.
             return new ItemCodec(null);

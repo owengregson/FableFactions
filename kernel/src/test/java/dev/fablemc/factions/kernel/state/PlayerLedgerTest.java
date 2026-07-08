@@ -9,7 +9,12 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** COW shard isolation and field round-trips for the sharded {@link PlayerLedger}. */
+/**
+ * COW shard isolation and field round-trips for the sharded {@link PlayerLedger}.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class PlayerLedgerTest {
 
     /** Allocates ordinals 0..count-1 with deterministic UUIDs. */

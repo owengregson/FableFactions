@@ -9,7 +9,6 @@ import dev.fablemc.factions.kernel.effect.AuditEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.effect.SystemEffect;
 import dev.fablemc.factions.kernel.intent.Origin;
-import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 
 /**
  * Encode/decode for the audit/system effect range ({@link EffectTag.Domain#SYSTEM}, {@code 0x0C00}):
@@ -30,7 +29,7 @@ public final class SystemCodec {
                 AuditEffect.AuditRecorded x = (AuditEffect.AuditRecorded) e;
                 o.writeInt(x.faction());
                 Wire.writeUuid(o, x.actor());
-                Wire.writeString(o, x.action() == null ? null : x.action().id());
+                Wire.writeAuditAction(o, x.action());
                 Wire.writeString(o, x.detail());
             }
             case CONFIG_SWAPPED -> Wire.writeString(o, ((SystemEffect.ConfigSwapped) e).diffSummary());
@@ -43,7 +42,7 @@ public final class SystemCodec {
         return switch (tag) {
             case AUDIT_RECORDED ->
                     new AuditEffect.AuditRecorded(seq, origin, in.readInt(), Wire.readUuid(in),
-                            FactionAuditAction.fromId(Wire.readString(in)), Wire.readString(in));
+                            Wire.readAuditAction(in), Wire.readString(in));
             case CONFIG_SWAPPED -> new SystemEffect.ConfigSwapped(seq, origin, Wire.readString(in));
             default -> throw tag.outside(EffectTag.Domain.SYSTEM);
         };

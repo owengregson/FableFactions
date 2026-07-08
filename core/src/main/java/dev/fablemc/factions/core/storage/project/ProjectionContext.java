@@ -26,6 +26,8 @@ import dev.fablemc.factions.core.storage.SqlDialect;
  */
 public final class ProjectionContext {
 
+    private static final String[] KEY_ID = {"id"};
+
     private final SqlDialect dialect;
     private final IntFunction<String> worldResolver;
     private final LongSupplier wallClock;
@@ -53,6 +55,31 @@ public final class ProjectionContext {
     /** Appends one op to the current flush. */
     public void add(ProjectionOp op) {
         ops.add(op);
+    }
+
+    // ── row-emission verbs (the appliers' vocabulary) ─────────────────────────────────────
+
+    /** Buffers a raw prepared statement with its positional {@code params}. */
+    public void op(String sql, Object... params) {
+        ops.add(new ProjectionOp(sql, params));
+    }
+
+    /**
+     * Buffers a dialect upsert into {@code table} writing {@code columns} (bound in order from
+     * {@code params}), keyed on {@code keyColumns}.
+     */
+    public void upsert(String table, String[] columns, String[] keyColumns, Object... params) {
+        ops.add(new ProjectionOp(dialect.upsert(table, columns, keyColumns), params));
+    }
+
+    /** Buffers a dialect upsert keyed on the ubiquitous single {@code id} column. */
+    public void upsertById(String table, String[] columns, Object... params) {
+        upsert(table, columns, KEY_ID, params);
+    }
+
+    /** Buffers a delete of every {@code table} row whose {@code column} equals {@code value}. */
+    public void deleteBy(String table, String column, Object value) {
+        ops.add(new ProjectionOp(dialect.deleteByColumn(table, column), new Object[] {value}));
     }
 
     /** Primes a handle→id mapping at boot (from the {@code factions} table). */
@@ -95,19 +122,16 @@ public final class ProjectionContext {
 
     // ── shared row helpers ────────────────────────────────────────────────────────────────
 
-    /** Adds a single-column {@code UPDATE factions ... WHERE id=?} for a resolved handle. */
+    /** Buffers a single-column {@code UPDATE factions ... WHERE id=?} for a resolved handle. */
     public void factionUpdate(int handle, String setClause, Object value) {
         String fid = factionIdByHandle.get(handle);
         if (fid != null) {
-            add(new ProjectionOp("UPDATE `factions` SET " + setClause + " WHERE `id`=?",
-                    new Object[] {value, fid}));
+            op("UPDATE `factions` SET " + setClause + " WHERE `id`=?", value, fid);
         }
     }
 
-    /** Adds a single-column upsert into {@code players} keyed by the player UUID. */
+    /** Buffers a single-column upsert into {@code players} keyed by the player UUID. */
     public void playerUpsert(UUID player, String column, Object value) {
-        add(new ProjectionOp(dialect.upsert("players",
-                new String[] {"id", column}, new String[] {"id"}),
-                new Object[] {player.toString(), value}));
+        upsertById("players", new String[] {"id", column}, player.toString(), value);
     }
 }

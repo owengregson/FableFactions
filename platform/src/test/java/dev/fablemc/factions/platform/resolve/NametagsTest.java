@@ -3,8 +3,8 @@ package dev.fablemc.factions.platform.resolve;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.fablemc.factions.platform.gui.MenuModel;
 import org.junit.jupiter.api.Test;
+import dev.fablemc.factions.platform.gui.MenuModel;
 
 /**
  * The {@link Nametags} budget math (the AM-13 / version-deltas Risk #10 truncation) and the

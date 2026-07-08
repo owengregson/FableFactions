@@ -14,12 +14,13 @@ import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 
 /**
- * Role and rank intents: promote / demote / custom role create-rename-reprioritize-prefix-delete-assign.
+ * Reduces the role and rank intents: promote / demote / custom role create-rename-reprioritize-prefix-delete-assign.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class RoleReducer {
 
@@ -47,20 +48,18 @@ final class RoleReducer {
             throw new IllegalStateException("unhandled role intent: " + i.getClass().getName());
         }
     }
+
     static void changeRank(ReduceSupport s, int factionHandle, UUID actor, UUID target, boolean promote) {
-        Faction f = s.resolve(factionHandle);
+        Faction f = s.factionOrReject(factionHandle);
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        int actorOrd = s.memberOrd(actor);
-        int targetOrd = s.memberOrd(target);
-        if (actorOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(actorOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_IN_FACTION);
+        int actorOrd = s.memberOfOrReject(actor, f.idx(), ReasonCode.NOT_IN_FACTION);
+        if (actorOrd < 0) {
             return;
         }
-        if (targetOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(targetOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_MEMBER);
+        int targetOrd = s.memberOfOrReject(target, f.idx(), ReasonCode.NOT_MEMBER);
+        if (targetOrd < 0) {
             return;
         }
         Rank actorRank = s.rankOf(f, actorOrd);
@@ -82,9 +81,8 @@ final class RoleReducer {
     }
 
     static void createRole(ReduceSupport s, RoleIntent.CreateRole c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (!s.state.config().role().customEnabled()) {
@@ -122,9 +120,8 @@ final class RoleReducer {
     }
 
     static void renameRole(ReduceSupport s, RoleIntent.RenameRole c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (!s.state.config().role().overridesEnabled() && !s.state.config().role().customEnabled()) {
@@ -150,9 +147,8 @@ final class RoleReducer {
     }
 
     static void setRolePriority(ReduceSupport s, RoleIntent.SetRolePriority c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         int idx = RoleRules.indexByName(f.ranks(), c.roleName());
@@ -173,9 +169,8 @@ final class RoleReducer {
     }
 
     static void setRolePrefix(ReduceSupport s, RoleIntent.SetRolePrefix c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (!s.state.config().role().prefixesEnabled()) {
@@ -203,9 +198,8 @@ final class RoleReducer {
     }
 
     static void deleteRole(ReduceSupport s, RoleIntent.DeleteRole c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         int idx = RoleRules.indexByName(f.ranks(), c.roleName());
@@ -228,14 +222,12 @@ final class RoleReducer {
     }
 
     static void assignRole(ReduceSupport s, RoleIntent.AssignRole c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        int targetOrd = s.memberOrd(c.target());
-        if (targetOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(targetOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_MEMBER);
+        int targetOrd = s.memberOfOrReject(c.target(), f.idx(), ReasonCode.NOT_MEMBER);
+        if (targetOrd < 0) {
             return;
         }
         int roleIdx = RoleRules.indexByName(f.ranks(), c.roleName());
@@ -256,11 +248,11 @@ final class RoleReducer {
     }
 
     static boolean rankInUse(ReduceSupport s, int factionOrd, int rankIdx) {
-        PlayerLedger l = s.state.ledger();
-        int hw = l.highWater();
-        for (int i = 0; i < hw; i++) {
-            if (l.has(i) && FactionHandle.ordinal(l.factionHandle(i)) == factionOrd
-                    && l.rankIdx(i) == rankIdx) {
+        PlayerLedger ledger = s.state.ledger();
+        int highWater = ledger.highWater();
+        for (int i = 0; i < highWater; i++) {
+            if (ledger.has(i) && FactionHandle.ordinal(ledger.factionHandle(i)) == factionOrd
+                    && ledger.rankIdx(i) == rankIdx) {
                 return true;
             }
         }
@@ -268,15 +260,15 @@ final class RoleReducer {
     }
 
     static void reindexRanksAfterRemoval(ReduceSupport s, int factionOrd, int removedIdx) {
-        PlayerLedger l = s.state.ledger();
-        int hw = l.highWater();
-        for (int i = 0; i < hw; i++) {
-            if (l.has(i) && FactionHandle.ordinal(l.factionHandle(i)) == factionOrd
-                    && l.rankIdx(i) > removedIdx) {
-                l = l.withRankIdx(i, l.rankIdx(i) - 1);
+        PlayerLedger ledger = s.state.ledger();
+        int highWater = ledger.highWater();
+        for (int i = 0; i < highWater; i++) {
+            if (ledger.has(i) && FactionHandle.ordinal(ledger.factionHandle(i)) == factionOrd
+                    && ledger.rankIdx(i) > removedIdx) {
+                ledger = ledger.withRankIdx(i, ledger.rankIdx(i) - 1);
             }
         }
-        s.state = s.state.withLedger(l);
+        s.state = s.state.withLedger(ledger);
     }
 
     static Rank[] append(Rank[] ranks, Rank r) {

@@ -4,7 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** Round-trip and region/block derivation for {@link ChunkKeys}, including negative coordinates. */
+/**
+ * Round-trip and region/block derivation for {@link ChunkKeys}, including negative coordinates.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class ChunkKeysTest {
 
     @Test

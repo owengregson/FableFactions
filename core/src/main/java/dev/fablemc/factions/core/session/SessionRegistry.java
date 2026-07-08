@@ -1,5 +1,6 @@
 package dev.fablemc.factions.core.session;
 
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -30,9 +31,7 @@ public final class SessionRegistry {
      * already-tracked player returns the live session rather than replacing it.
      */
     public PlayerSession open(Player player) {
-        if (player == null) {
-            throw new IllegalArgumentException("player must not be null");
-        }
+        Objects.requireNonNull(player, "player");
         UUID id = player.getUniqueId();
         return sessions.computeIfAbsent(id, key -> new PlayerSession(key, player));
     }
@@ -42,9 +41,7 @@ public final class SessionRegistry {
      * tests and by boot paths that do not hold a live {@code Player}.
      */
     public PlayerSession open(UUID playerId, Player player) {
-        if (playerId == null) {
-            throw new IllegalArgumentException("playerId must not be null");
-        }
+        Objects.requireNonNull(playerId, "playerId");
         return sessions.computeIfAbsent(playerId, key -> new PlayerSession(key, player));
     }
 

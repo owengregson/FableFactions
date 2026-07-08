@@ -22,8 +22,11 @@ import dev.fablemc.factions.kernel.state.RelationKind;
 
 /**
  * The protection verdict truth table over (zone × relation × flags × action), built from a small
- * fixture snapshot (proposal-C §5c, pvp-engines §3.1). {@link Verdicts#decide} is the zero-alloc
+ * fixture snapshot (proposal-C §5c, ref-engines §3.1). {@link Verdicts#decide} is the zero-alloc
  * read-side decision; here we pin every branch of its short-circuit order.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 class VerdictTruthTableTest {
 

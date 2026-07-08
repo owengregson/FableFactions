@@ -4,7 +4,7 @@ import dev.fablemc.factions.kernel.config.RelationConfig;
 import dev.fablemc.factions.kernel.state.RelationKind;
 
 /**
- * Relation state-machine rules (pvp-commands-admin.md §6.3, pvp-services.md §7.1). Pure static
+ * Relation state-machine rules (ref-commands-admin.md §6.3, ref-services.md §7.1). Pure static
  * helpers shared by the command layer and the reducer.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
@@ -63,7 +63,7 @@ public final class RelationRules {
      * {@code true} when setting {@code newKind} toward one target is within the ally/truce limit,
      * given the faction's current outgoing wishes and the {@code previousKind} toward that target.
      */
-    public static boolean withinRelationLimit(RelationConfig cfg, byte[] outKinds, int len,
+    public static boolean withinRelationLimit(RelationConfig config, byte[] outKinds, int len,
                                               byte previousKind, byte newKind) {
         if (newKind != RelationKind.ALLY && newKind != RelationKind.TRUCE) {
             return true;
@@ -72,7 +72,7 @@ public final class RelationRules {
             return true;
         }
         int count = countKind(outKinds, len, newKind);
-        int max = newKind == RelationKind.ALLY ? cfg.maxAllies() : cfg.maxTruces();
+        int max = newKind == RelationKind.ALLY ? config.maxAllies() : config.maxTruces();
         return count < Math.max(0, max);
     }
 }

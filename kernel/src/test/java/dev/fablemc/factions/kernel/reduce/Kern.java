@@ -46,6 +46,9 @@ import dev.fablemc.factions.kernel.state.RelationEdges;
  * paged continuations exactly as the writer would (re-enqueue {@code ContinuationRequested.next},
  * FIFO, to completion), plus deterministic fixtures, a canonical state digest for replay-equality,
  * and structural scanners (per-faction atlas land counts, dangling-reference checks).
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 final class Kern {
 

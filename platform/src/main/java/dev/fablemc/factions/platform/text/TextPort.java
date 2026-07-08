@@ -1,7 +1,5 @@
 package dev.fablemc.factions.platform.text;
 
-import dev.fablemc.factions.platform.probe.Probes;
-import dev.fablemc.factions.platform.resolve.Feedback;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import net.kyori.adventure.text.Component;
@@ -13,6 +11,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.ProbeTarget;
+import dev.fablemc.factions.platform.resolve.Feedback;
 
 /**
  * The ONE text→Bukkit boundary (CONTRACTS §3, ARCHITECTURE AM-1). Every user-facing
@@ -41,8 +41,7 @@ public final class TextPort {
     private static final LegacyComponentSerializer SECTION_SERIALIZER = LegacyComponentSerializer.legacySection();
 
     /** Whether this server's clients render hex colours (§x) — the Spigot ChatColor.of marker. */
-    private static final boolean HEX_COLORS =
-            Probes.methodPresent("net.md_5.bungee.api.ChatColor", "of", "java.lang.String");
+    private static final boolean HEX_COLORS = ProbeTarget.BUNGEE_CHAT_COLOR.hasMethod("of", String.class);
 
     // Reflective Bungee sink: fromLegacyText(String) → BaseComponent[]; Player.Spigot#sendMessage(BaseComponent[]).
     private static final @Nullable Method FROM_LEGACY;
@@ -53,11 +52,11 @@ public final class TextPort {
         Method fromLegacy = null;
         Method spigotSend = null;
         try {
-            Class<?> textComponent = Class.forName("net.md_5.bungee.api.chat.TextComponent");
+            Class<?> textComponent = Class.forName(ProbeTarget.BUNGEE_TEXT_COMPONENT.className());
             fromLegacy = textComponent.getMethod("fromLegacyText", String.class);
-            Class<?> baseComponent = Class.forName("net.md_5.bungee.api.chat.BaseComponent");
+            Class<?> baseComponent = Class.forName(ProbeTarget.BUNGEE_BASE_COMPONENT.className());
             Class<?> baseComponentArray = Array.newInstance(baseComponent, 0).getClass();
-            Class<?> spigotClass = Class.forName("org.bukkit.entity.Player$Spigot");
+            Class<?> spigotClass = Class.forName(ProbeTarget.PLAYER_SPIGOT.className());
             spigotSend = spigotClass.getMethod("sendMessage", baseComponentArray);
         } catch (ReflectiveOperationException | LinkageError absent) {
             fromLegacy = null;

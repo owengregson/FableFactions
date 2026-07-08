@@ -1,7 +1,6 @@
 package dev.fablemc.factions.platform.resolve;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -10,6 +9,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.ProbeTarget;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * Title / action-bar / boss-bar delivery via era-correct probe chains, with a chat-line
@@ -46,21 +47,22 @@ public final class Feedback {
     private static final @Nullable Object EMPTY_BAR_FLAGS;
 
     static {
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-        TITLE_5 = titleHandle(lookup, MethodType.methodType(
+        TITLE_5 = Probes.virtualHandle(Player.class, "sendTitle", MethodType.methodType(
                 void.class, String.class, String.class, int.class, int.class, int.class));
-        TITLE_2 = titleHandle(lookup, MethodType.methodType(void.class, String.class, String.class));
+        TITLE_2 = Probes.virtualHandle(Player.class, "sendTitle",
+                MethodType.methodType(void.class, String.class, String.class));
 
         Method spigotSend = null;
         Object actionBar = null;
         Constructor<?> textCtor = null;
         try {
-            Class<?> spigotClass = Class.forName("org.bukkit.entity.Player$Spigot");
-            Class<?> chatMessageType = Class.forName("net.md_5.bungee.api.ChatMessageType");
-            Class<?> baseComponent = Class.forName("net.md_5.bungee.api.chat.BaseComponent");
+            Class<?> spigotClass = Class.forName(ProbeTarget.PLAYER_SPIGOT.className());
+            Class<?> chatMessageType = Class.forName(ProbeTarget.BUNGEE_CHAT_MESSAGE_TYPE.className());
+            Class<?> baseComponent = Class.forName(ProbeTarget.BUNGEE_BASE_COMPONENT.className());
             spigotSend = spigotClass.getMethod("sendMessage", chatMessageType, baseComponent);
             actionBar = enumValue(chatMessageType, "ACTION_BAR");
-            textCtor = Class.forName("net.md_5.bungee.api.chat.TextComponent").getConstructor(String.class);
+            textCtor = Class.forName(ProbeTarget.BUNGEE_TEXT_COMPONENT.className())
+                    .getConstructor(String.class);
         } catch (ReflectiveOperationException | LinkageError absent) {
             spigotSend = null;
             actionBar = null;
@@ -75,9 +77,9 @@ public final class Feedback {
         Object barStyle = null;
         Object emptyFlags = null;
         try {
-            Class<?> barColorClass = Class.forName("org.bukkit.boss.BarColor");
-            Class<?> barStyleClass = Class.forName("org.bukkit.boss.BarStyle");
-            Class<?> barFlagClass = Class.forName("org.bukkit.boss.BarFlag");
+            Class<?> barColorClass = Class.forName(ProbeTarget.BOSS_BAR_COLOR.className());
+            Class<?> barStyleClass = Class.forName(ProbeTarget.BOSS_BAR_STYLE.className());
+            Class<?> barFlagClass = Class.forName(ProbeTarget.BOSS_BAR_FLAG.className());
             Object flagArray = Array.newInstance(barFlagClass, 0);
             createBossBar = Bukkit.class.getMethod(
                     "createBossBar", String.class, barColorClass, barStyleClass, flagArray.getClass());
@@ -168,14 +170,6 @@ public final class Feedback {
         String actionTier = SPIGOT_SEND != null ? "spigot" : "chat";
         String bossTier = CREATE_BOSS_BAR != null ? "createBossBar" : "skip";
         return "title=" + titleTier + " actionBar=" + actionTier + " bossBar=" + bossTier;
-    }
-
-    private static @Nullable MethodHandle titleHandle(@NotNull MethodHandles.Lookup lookup, @NotNull MethodType type) {
-        try {
-            return lookup.findVirtual(Player.class, "sendTitle", type);
-        } catch (ReflectiveOperationException | LinkageError absent) {
-            return null;
-        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

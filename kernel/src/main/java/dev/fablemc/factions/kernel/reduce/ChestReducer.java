@@ -2,18 +2,18 @@ package dev.fablemc.factions.kernel.reduce;
 
 import dev.fablemc.factions.kernel.effect.ChestEffect;
 import dev.fablemc.factions.kernel.intent.ChestIntent;
-import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.rules.ChestRules;
 import dev.fablemc.factions.kernel.state.ChestRef;
 import dev.fablemc.factions.kernel.state.Faction;
 
 /**
- * Chest intents: create / delete / commit contents blob.
+ * Reduces the chest intents: create / delete / commit contents blob.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class ChestReducer {
 
@@ -31,15 +31,13 @@ final class ChestReducer {
             throw new IllegalStateException("unhandled chest intent: " + i.getClass().getName());
         }
     }
+
     static void createChest(ReduceSupport s, ChestIntent.CreateChest c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        ReasonCode err = ChestRules.validateCreate(s.state.config(), s.state.chests(), f.idx(), c.name());
-        if (err != null) {
-            s.reject(err);
+        if (s.rejectIf(ChestRules.validateCreate(s.state.config(), s.state.chests(), f.idx(), c.name()))) {
             return;
         }
         s.state = s.state.withChests(s.state.chests().set(f.idx(),
@@ -48,9 +46,8 @@ final class ChestReducer {
     }
 
     static void deleteChest(ReduceSupport s, ChestIntent.DeleteChest c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (!ChestRules.exists(s.state.chests(), f.idx(), c.name())) {
@@ -61,9 +58,8 @@ final class ChestReducer {
     }
 
     static void commitChestContents(ReduceSupport s, ChestIntent.CommitChestContents c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         ChestRef existing = s.state.chests().get(f.idx(), c.name());

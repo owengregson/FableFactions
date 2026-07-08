@@ -42,8 +42,11 @@ import dev.fablemc.factions.kernel.vocab.PowerSource;
 
 /**
  * Hand-computed pins for every formula named in the W2a research ground truth
- * (pvp-bugs-concurrency Appendix, pvp-services power/claim/economy, pvp-commands-* relation/role,
- * pvp-engines death/kill/raidable). Each case is computed by hand from the reference defaults.
+ * (ref-bugs-concurrency Appendix, ref-services power/claim/economy, ref-commands-* relation/role,
+ * ref-engines death/kill/raidable). Each case is computed by hand from the reference defaults.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 class FormulaPinTest {
 

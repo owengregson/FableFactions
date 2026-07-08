@@ -24,13 +24,11 @@ public final class SessionProjection {
 
     public static void apply(ProjectionContext ctx, SessionEffect.InboxQueued x) {
         String msg = x.key() == null ? "" : x.key().key();
-        ctx.add(new ProjectionOp(ctx.dialect().upsert("faction_inbox", new String[] {"id",
-                "player_id", "message", "created_at"}, new String[] {"id"}),
-                new Object[] {ctx.ledgerId(x.seq()), x.player().toString(), msg, ctx.now()}));
+        ctx.upsertById("faction_inbox", new String[] {"id", "player_id", "message", "created_at"},
+                ctx.ledgerId(x.seq()), x.player().toString(), msg, ctx.now());
     }
 
     public static void apply(ProjectionContext ctx, SessionEffect.InboxDelivered x) {
-        ctx.add(new ProjectionOp(ctx.dialect().deleteByColumn("faction_inbox", "player_id"),
-                new Object[] {x.player().toString()}));
+        ctx.deleteBy("faction_inbox", "player_id", x.player().toString());
     }
 }

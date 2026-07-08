@@ -12,7 +12,12 @@ import org.junit.jupiter.api.Test;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 
-/** Put/get/remove/iterate at 100k scale plus copy-one-region COW isolation for {@link ClaimAtlas}. */
+/**
+ * Put/get/remove/iterate at 100k scale plus copy-one-region COW isolation for {@link ClaimAtlas}.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class ClaimAtlasTest {
 
     private static final int WORLD = 0;

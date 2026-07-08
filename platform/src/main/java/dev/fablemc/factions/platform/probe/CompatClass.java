@@ -44,4 +44,26 @@ public enum CompatClass {
     public @NotNull Class<?> load(@NotNull ClassLoader loader) throws ClassNotFoundException {
         return Class.forName(fqn, true, loader);
     }
+
+    /**
+     * Loads this compat class and instantiates it through its public no-arg constructor, typed
+     * as {@code surface} (the platform-side SPI the compat class implements). Reflective and
+     * linkage failures propagate for the caller's capability gate to catch.
+     *
+     * @param <T> the platform-side surface type
+     */
+    public <T> @NotNull T instance(@NotNull Class<T> surface) throws ReflectiveOperationException {
+        return surface.cast(Class.forName(fqn).getDeclaredConstructor().newInstance());
+    }
+
+    /**
+     * As {@link #instance(Class)}, through the single-argument public
+     * {@code (parameterType)} constructor.
+     *
+     * @param <T> the platform-side surface type
+     */
+    public <T> @NotNull T instance(@NotNull Class<T> surface, @NotNull Class<?> parameterType,
+            @NotNull Object argument) throws ReflectiveOperationException {
+        return surface.cast(Class.forName(fqn).getDeclaredConstructor(parameterType).newInstance(argument));
+    }
 }

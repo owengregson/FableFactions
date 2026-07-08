@@ -47,7 +47,7 @@ public final class FeedbackCodec {
             }
             case REJECTED -> {
                 FeedbackEffect.Rejected x = (FeedbackEffect.Rejected) e;
-                Wire.writeString(o, x.reason() == null ? null : x.reason().name());
+                Wire.writeReasonCode(o, x.reason());
                 Wire.writeStringArray(o, x.args());
             }
             default -> throw tag.outside(EffectTag.Domain.FEEDBACK);

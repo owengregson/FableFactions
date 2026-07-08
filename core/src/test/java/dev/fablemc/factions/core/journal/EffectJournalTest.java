@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.fablemc.factions.kernel.effect.Effect;
-import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.effect.LifecycleEffect;
+import dev.fablemc.factions.kernel.intent.Origin;
 
 /**
  * The write-ahead journal's crash-safety contract (work order W2b §3): a truncated tail replays

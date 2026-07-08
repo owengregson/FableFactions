@@ -41,6 +41,9 @@ import dev.fablemc.factions.kernel.vocab.Relation;
  * drained as the writer would. Pins the W2a invariants: never-throws, replay determinism, relation
  * symmetry, member/land caps (or raidable), non-negative banks, escrow conservation, incremental
  * aggregates == recompute, ≤1024 per page, and disband-leaves-no-dangling.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
  */
 class ReducerPropertyTest {
 

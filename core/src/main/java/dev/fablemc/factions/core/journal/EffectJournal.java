@@ -33,8 +33,14 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
     /** Production segment roll size (64&nbsp;MB). */
     public static final long DEFAULT_SEGMENT_BYTES = 64L * 1024 * 1024;
 
-    private static final String PREFIX = "seg-";
-    private static final String SUFFIX = ".fj";
+    // Segment file naming, shared with JournalReplay (the read side of this format).
+    static final String SEGMENT_PREFIX = "seg-";
+    static final String SEGMENT_SUFFIX = ".fj";
+
+    /** Frame prefix ahead of the CRC-covered body: {@code len(4) + crc(4)}. */
+    static final int FRAME_PREFIX_BYTES = 8;
+    /** Body prefix ahead of the payload (CRC-covered): {@code seq(8) + type(2)}. */
+    static final int BODY_PREFIX_BYTES = 10;
 
     private final Path dir;
     private final long maxSegmentBytes;
@@ -64,7 +70,7 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
 
     /** The path a segment file with the given index lives at (also used by replay). */
     public static Path segmentPath(Path dir, int index) {
-        return dir.resolve(String.format("%s%010d%s", PREFIX, index, SUFFIX));
+        return dir.resolve(String.format("%s%010d%s", SEGMENT_PREFIX, index, SEGMENT_SUFFIX));
     }
 
     /** The directory this journal writes into. */
@@ -120,14 +126,14 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
         int type = JournalCodec.tagOf(effect);
         long seq = effect.seq();
 
-        byte[] body = new byte[10 + payload.length];
+        byte[] body = new byte[BODY_PREFIX_BYTES + payload.length];
         ByteBuffer b = ByteBuffer.wrap(body);
         b.putLong(seq);
         b.putShort((short) type);
         b.put(payload);
         int crc = Crc32c.compute(body);
 
-        int recordBytes = 8 + body.length;     // len(4) + crc(4) + body
+        int recordBytes = FRAME_PREFIX_BYTES + body.length;
         if (segmentBytes > 0 && segmentBytes + recordBytes > maxSegmentBytes) {
             roll();
         }
@@ -159,10 +165,11 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
 
     private static int nextFreshIndex(Path dir) throws IOException {
         int max = -1;
-        try (var stream = Files.newDirectoryStream(dir, PREFIX + "*" + SUFFIX)) {
+        try (var stream = Files.newDirectoryStream(dir, SEGMENT_PREFIX + "*" + SEGMENT_SUFFIX)) {
             for (Path p : stream) {
                 String name = p.getFileName().toString();
-                String mid = name.substring(PREFIX.length(), name.length() - SUFFIX.length());
+                String mid = name.substring(SEGMENT_PREFIX.length(),
+                        name.length() - SEGMENT_SUFFIX.length());
                 try {
                     max = Math.max(max, Integer.parseInt(mid));
                 } catch (NumberFormatException ignored) {

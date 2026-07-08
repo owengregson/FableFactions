@@ -10,12 +10,13 @@ import dev.fablemc.factions.kernel.state.Home;
 import dev.fablemc.factions.kernel.state.Warp;
 
 /**
- * Travel intents: faction home set-unset / warp set-delete-password-cost.
+ * Reduces the travel intents: faction home set-unset / warp set-delete-password-cost.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class TravelReducer {
 
@@ -39,10 +40,10 @@ final class TravelReducer {
             throw new IllegalStateException("unhandled travel intent: " + i.getClass().getName());
         }
     }
+
     static void setHome(ReduceSupport s, TravelIntent.SetHome c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         s.replaceFaction(FactionEdit.withHome(f,
@@ -51,9 +52,8 @@ final class TravelReducer {
     }
 
     static void unsetHome(ReduceSupport s, TravelIntent.UnsetHome c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         s.replaceFaction(FactionEdit.withHome(f, null));
@@ -61,14 +61,11 @@ final class TravelReducer {
     }
 
     static void setWarp(ReduceSupport s, TravelIntent.SetWarp c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        ReasonCode err = TravelRules.validateSetWarp(s.state.config(), s.state.warps(), f.idx(), c.name());
-        if (err != null) {
-            s.reject(err);
+        if (s.rejectIf(TravelRules.validateSetWarp(s.state.config(), s.state.warps(), f.idx(), c.name()))) {
             return;
         }
         Warp existing = s.state.warps().get(f.idx(), c.name());
@@ -82,9 +79,8 @@ final class TravelReducer {
     }
 
     static void deleteWarp(ReduceSupport s, TravelIntent.DeleteWarp c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         if (TravelRules.requireWarp(s.state.warps(), f.idx(), c.name()) != null) {
@@ -96,9 +92,8 @@ final class TravelReducer {
     }
 
     static void setWarpPassword(ReduceSupport s, TravelIntent.SetWarpPassword c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         Warp w = s.state.warps().get(f.idx(), c.name());
@@ -114,9 +109,8 @@ final class TravelReducer {
     }
 
     static void setWarpCost(ReduceSupport s, TravelIntent.SetWarpCost c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         Warp w = s.state.warps().get(f.idx(), c.name());

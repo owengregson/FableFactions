@@ -1,7 +1,5 @@
 package dev.fablemc.factions.platform.actor;
 
-import dev.fablemc.factions.platform.probe.Probes;
-import org.bukkit.entity.AnimalTamer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -10,6 +8,7 @@ import org.bukkit.entity.Tameable;
 import org.bukkit.projectiles.ProjectileSource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.ProbeTarget;
 
 /**
  * Resolves the TRUE attacker behind an indirect damage source (CONTRACTS §3, AM-16) — the
@@ -28,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 public final class DamageAttribution {
 
     /** {@code AreaEffectCloud} is 1.9+ — probe its presence once, gate the {@link Clouds} helper. */
-    private static final boolean AREA_EFFECT_CLOUD = Probes.classPresent("org.bukkit.entity.AreaEffectCloud");
+    private static final boolean AREA_EFFECT_CLOUD = ProbeTarget.AREA_EFFECT_CLOUD.present();
 
     /** Bounds the shooter→source→owner chain so a pathological cycle can never spin. */
     private static final int MAX_DEPTH = 4;
@@ -50,13 +49,13 @@ public final class DamageAttribution {
         if (damager instanceof Player) {
             return damager;
         }
-        if (damager instanceof Projectile) {
-            ProjectileSource shooter = ((Projectile) damager).getShooter();
-            return shooter instanceof Entity ? resolve((Entity) shooter, depth + 1) : null;
+        if (damager instanceof Projectile projectile) {
+            ProjectileSource shooter = projectile.getShooter();
+            return shooter instanceof Entity firer ? resolve(firer, depth + 1) : null;
         }
-        if (damager instanceof TNTPrimed) {
+        if (damager instanceof TNTPrimed tnt) {
             // TNTPrimed is floor-present; getSource() semantics vary pre-1.8 but never throws here.
-            Entity source = ((TNTPrimed) damager).getSource();
+            Entity source = tnt.getSource();
             return source != null ? resolve(source, depth + 1) : null;
         }
         if (AREA_EFFECT_CLOUD) {
@@ -65,11 +64,8 @@ public final class DamageAttribution {
                 return resolve(cloudSource, depth + 1);
             }
         }
-        if (damager instanceof Tameable) {
-            AnimalTamer owner = ((Tameable) damager).getOwner();
-            if (owner instanceof Player) {
-                return (Entity) owner;
-            }
+        if (damager instanceof Tameable pet && pet.getOwner() instanceof Player owner) {
+            return owner;
         }
         return null;
     }
@@ -85,11 +81,10 @@ public final class DamageAttribution {
         private Clouds() {}
 
         static @Nullable Entity source(@NotNull Entity entity) {
-            if (!(entity instanceof org.bukkit.entity.AreaEffectCloud)) {
+            if (!(entity instanceof org.bukkit.entity.AreaEffectCloud cloud)) {
                 return null;
             }
-            ProjectileSource source = ((org.bukkit.entity.AreaEffectCloud) entity).getSource();
-            return source instanceof Entity ? (Entity) source : null;
+            return cloud.getSource() instanceof Entity thrower ? thrower : null;
         }
     }
 }

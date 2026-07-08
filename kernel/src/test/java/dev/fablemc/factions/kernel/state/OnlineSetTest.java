@@ -10,7 +10,12 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-/** Membership, iteration, and COW isolation for the {@link OnlineSet} bitset. */
+/**
+ * Membership, iteration, and COW isolation for the {@link OnlineSet} bitset.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class OnlineSetTest {
 
     @Test

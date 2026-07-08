@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed {@code roles.*} configuration (roles.yml — pvp-resources.md §5, pvp-commands-admin.md §1).
+ * Typed {@code roles.*} configuration (roles.yml — ref-resources.md §5, ref-commands-admin.md §1).
  *
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.
@@ -27,7 +27,7 @@ public record RoleConfig(
     /**
      * The reference code-default role configuration. NOTE: the shipped {@code roles.yml}
      * overrides some of these (e.g. {@code max-per-faction: 8}, non-empty default prefixes);
-     * these are the getter defaults used when a key is absent (pvp-commands-admin.md §1).
+     * these are the getter defaults used when a key is absent (ref-commands-admin.md §1).
      */
     public static RoleConfig defaults() {
         return new RoleConfig(

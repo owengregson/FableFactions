@@ -1,13 +1,17 @@
 package dev.fablemc.factions.platform.probe;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import org.bukkit.Material;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * The primitive boot-time probes every resolver and {@link Capabilities} builds on
- * (CONTRACTS §3): "does this class / method / enum-constant exist on THIS server?".
- * A class either exists or it does not — version strings are never parsed for
- * behaviour (Mental rule, {@code mental-seam.md} §1).
+ * (CONTRACTS §3): "does this class / method / enum-constant / handle exist on THIS
+ * server?". A class either exists or it does not — version strings are never parsed
+ * for behaviour (Mental rule, {@code mental-seam.md} §1).
  *
  * <p>Every probe catches {@link LinkageError} in addition to the ordinary reflective
  * exceptions: a partially-present or mismatched type surfaces as a {@code LinkageError}
@@ -75,5 +79,41 @@ public final class Probes {
         } catch (IllegalArgumentException | LinkageError absent) {
             return null;
         }
+    }
+
+    /**
+     * The handle for the public virtual method {@code owner.name(type)}, or {@code null}
+     * when this server lacks it — the ONE quiet-resolve shape every boot-resolved
+     * {@code MethodHandle} in the platform flows through.
+     */
+    public static @Nullable MethodHandle virtualHandle(
+            @NotNull Class<?> owner, @NotNull String name, @NotNull MethodType type) {
+        try {
+            return MethodHandles.lookup().findVirtual(owner, name, type);
+        } catch (ReflectiveOperationException | LinkageError absent) {
+            return null;
+        }
+    }
+
+    /**
+     * The handle for the public static method {@code owner.name(type)}, or {@code null}
+     * when this server lacks it (the static twin of {@link #virtualHandle}).
+     */
+    public static @Nullable MethodHandle staticHandle(
+            @NotNull Class<?> owner, @NotNull String name, @NotNull MethodType type) {
+        try {
+            return MethodHandles.lookup().findStatic(owner, name, type);
+        } catch (ReflectiveOperationException | LinkageError absent) {
+            return null;
+        }
+    }
+
+    /**
+     * True iff this server is post-flattening (1.13+) — {@code Material.WHITE_WOOL} is a
+     * post-flattening constant. THE flattening fact: every flattening-sensitive resolver
+     * ({@code Capabilities}, {@code LegacyMaterials}, {@code Nametags}) reads this one probe.
+     */
+    public static boolean flattened() {
+        return enumConstant(Material.class, "WHITE_WOOL") != null;
     }
 }

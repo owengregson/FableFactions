@@ -28,7 +28,6 @@ import javax.sql.DataSource;
 public final class AdvisoryLock implements AutoCloseable {
 
     private final DataSource dataSource;
-    private final SqlDialect dialect;
     private final String lockName;
     private final UUID owner;
     private final long ttlMillis;
@@ -36,10 +35,9 @@ public final class AdvisoryLock implements AutoCloseable {
     private final Connection heldMysqlConnection;   // non-null only for MySQL
     private boolean released;
 
-    private AdvisoryLock(DataSource dataSource, SqlDialect dialect, String lockName, UUID owner,
+    private AdvisoryLock(DataSource dataSource, String lockName, UUID owner,
                          long ttlMillis, LongSupplier clock, Connection heldMysqlConnection) {
         this.dataSource = dataSource;
-        this.dialect = dialect;
         this.lockName = lockName;
         this.owner = owner;
         this.ttlMillis = ttlMillis;
@@ -55,10 +53,10 @@ public final class AdvisoryLock implements AutoCloseable {
                                           UUID owner, long ttlMillis, LongSupplier clock)
             throws SQLException {
         String lockName = "fablefactions:" + dbKey;
-        if ("mysql".equals(dialect.name())) {
-            return tryAcquireMysql(dataSource, dialect, lockName, owner, ttlMillis, clock);
+        if (MySqlDialect.NAME.equals(dialect.name())) {
+            return tryAcquireMysql(dataSource, lockName, owner, ttlMillis, clock);
         }
-        return tryAcquireH2(dataSource, dialect, lockName, owner, ttlMillis, clock);
+        return tryAcquireH2(dataSource, lockName, owner, ttlMillis, clock);
     }
 
     /** Refreshes the H2 lock's expiry; a no-op for MySQL (its lock is connection-scoped). */
@@ -110,9 +108,8 @@ public final class AdvisoryLock implements AutoCloseable {
         }
     }
 
-    private static AdvisoryLock tryAcquireH2(DataSource dataSource, SqlDialect dialect,
-                                             String lockName, UUID owner, long ttlMillis,
-                                             LongSupplier clock) throws SQLException {
+    private static AdvisoryLock tryAcquireH2(DataSource dataSource, String lockName, UUID owner,
+                                             long ttlMillis, LongSupplier clock) throws SQLException {
         long now = clock.getAsLong();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -125,15 +122,15 @@ public final class AdvisoryLock implements AutoCloseable {
             ps.setString(4, owner.toString());
             int updated = ps.executeUpdate();
             if (updated == 1) {
-                return new AdvisoryLock(dataSource, dialect, lockName, owner, ttlMillis, clock, null);
+                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, null);
             }
             return null;   // held by another live instance and not expired
         }
     }
 
-    private static AdvisoryLock tryAcquireMysql(DataSource dataSource, SqlDialect dialect,
-                                                String lockName, UUID owner, long ttlMillis,
-                                                LongSupplier clock) throws SQLException {
+    private static AdvisoryLock tryAcquireMysql(DataSource dataSource, String lockName, UUID owner,
+                                                long ttlMillis, LongSupplier clock)
+            throws SQLException {
         Connection conn = dataSource.getConnection();
         boolean ok = false;
         try (PreparedStatement ps = conn.prepareStatement("SELECT GET_LOCK(?, 5)")) {
@@ -142,7 +139,7 @@ public final class AdvisoryLock implements AutoCloseable {
                 ok = rs.next() && rs.getInt(1) == 1;
             }
             if (ok) {
-                return new AdvisoryLock(dataSource, dialect, lockName, owner, ttlMillis, clock, conn);
+                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, conn);
             }
             return null;
         } finally {

@@ -72,7 +72,8 @@ public final class JournalReplay {
         if (!Files.isDirectory(dir)) {
             return out;
         }
-        try (var stream = Files.newDirectoryStream(dir, "seg-*.fj")) {
+        try (var stream = Files.newDirectoryStream(dir,
+                EffectJournal.SEGMENT_PREFIX + "*" + EffectJournal.SEGMENT_SUFFIX)) {
             for (Path p : stream) {
                 out.add(p);
             }
@@ -93,15 +94,16 @@ public final class JournalReplay {
         }
         ByteBuffer bb = ByteBuffer.wrap(bytes);
         while (bb.remaining() > 0) {
-            if (bb.remaining() < 8) {
+            if (bb.remaining() < EffectJournal.FRAME_PREFIX_BYTES) {
                 return new SegmentResult(count, lastSeq, true);   // torn header
             }
             int len = bb.getInt();
             int crc = bb.getInt();
-            if (len < 0 || len > MAX_PAYLOAD || bb.remaining() < 10 + len) {
+            if (len < 0 || len > MAX_PAYLOAD
+                    || bb.remaining() < EffectJournal.BODY_PREFIX_BYTES + len) {
                 return new SegmentResult(count, lastSeq, true);   // torn / bogus record
             }
-            byte[] body = new byte[10 + len];
+            byte[] body = new byte[EffectJournal.BODY_PREFIX_BYTES + len];
             bb.get(body);
             if (Crc32c.compute(body) != crc) {
                 return new SegmentResult(count, lastSeq, true);   // corrupt → clean prefix
@@ -123,7 +125,8 @@ public final class JournalReplay {
 
     private static long indexOf(Path segment) {
         String name = segment.getFileName().toString();
-        String mid = name.substring("seg-".length(), name.length() - ".fj".length());
+        String mid = name.substring(EffectJournal.SEGMENT_PREFIX.length(),
+                name.length() - EffectJournal.SEGMENT_SUFFIX.length());
         try {
             return Long.parseLong(mid);
         } catch (NumberFormatException ex) {

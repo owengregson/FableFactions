@@ -5,6 +5,7 @@ import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * The single material-flattening seam (CONTRACTS §3, version-deltas Risk #3). The kernel
@@ -19,8 +20,8 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class LegacyMaterials {
 
-    /** One boot flattening probe: {@code WHITE_WOOL} is a post-flattening constant. */
-    private static final boolean FLATTENED = Material.getMaterial("WHITE_WOOL") != null;
+    /** The single flattening fact ({@link Probes#flattened()}): identity above 1.13, table below. */
+    private static final boolean FLATTENED = Probes.flattened();
 
     /** A pre-flattening material identity: the legacy enum NAME plus its data byte. */
     private record Legacy(@NotNull String name, int data) {}
@@ -74,38 +75,21 @@ public final class LegacyMaterials {
     }
 
     private static Map<String, Legacy> buildTable() {
-        Map<String, Legacy> table = new HashMap<>();
-        // Wool: WOOL + colour data 0..15.
-        String[] wool = {
+        // The 16 colours in legacy WOOL data order (0..15); the legacy dye data is the
+        // exact inverse of it (BLACK dye is 0 where BLACK wool is 15), so one loop derives
+        // both. Beds all map onto the single colourless legacy BED item (id 355).
+        String[] colours = {
             "WHITE", "ORANGE", "MAGENTA", "LIGHT_BLUE", "YELLOW", "LIME", "PINK", "GRAY",
             "LIGHT_GRAY", "CYAN", "PURPLE", "BLUE", "BROWN", "GREEN", "RED", "BLACK"
         };
-        for (int i = 0; i < wool.length; i++) {
-            table.put(wool[i] + "_WOOL", new Legacy("WOOL", (byte) i));
-        }
-        // Dye: INK_SACK + data (the INVERSE-of-wool legacy dye ordering).
-        table.put("BLACK_DYE", new Legacy("INK_SACK", (byte) 0));
-        table.put("RED_DYE", new Legacy("INK_SACK", (byte) 1));
-        table.put("GREEN_DYE", new Legacy("INK_SACK", (byte) 2));
-        table.put("BROWN_DYE", new Legacy("INK_SACK", (byte) 3));
-        table.put("BLUE_DYE", new Legacy("INK_SACK", (byte) 4));
-        table.put("PURPLE_DYE", new Legacy("INK_SACK", (byte) 5));
-        table.put("CYAN_DYE", new Legacy("INK_SACK", (byte) 6));
-        table.put("LIGHT_GRAY_DYE", new Legacy("INK_SACK", (byte) 7));
-        table.put("GRAY_DYE", new Legacy("INK_SACK", (byte) 8));
-        table.put("PINK_DYE", new Legacy("INK_SACK", (byte) 9));
-        table.put("LIME_DYE", new Legacy("INK_SACK", (byte) 10));
-        table.put("YELLOW_DYE", new Legacy("INK_SACK", (byte) 11));
-        table.put("LIGHT_BLUE_DYE", new Legacy("INK_SACK", (byte) 12));
-        table.put("MAGENTA_DYE", new Legacy("INK_SACK", (byte) 13));
-        table.put("ORANGE_DYE", new Legacy("INK_SACK", (byte) 14));
-        table.put("WHITE_DYE", new Legacy("INK_SACK", (byte) 15));
-        // Bed: the legacy item is the colourless BED (item id 355); every colour maps to it.
-        for (String colour : wool) {
-            table.put(colour + "_BED", new Legacy("BED", (byte) 0));
+        Map<String, Legacy> table = new HashMap<>();
+        for (int i = 0; i < colours.length; i++) {
+            table.put(colours[i] + "_WOOL", new Legacy("WOOL", i));
+            table.put(colours[i] + "_DYE", new Legacy("INK_SACK", 15 - i));
+            table.put(colours[i] + "_BED", new Legacy("BED", 0));
         }
         // Skull: the player head is SKULL_ITEM data 3.
-        table.put("PLAYER_HEAD", new Legacy("SKULL_ITEM", (byte) 3));
+        table.put("PLAYER_HEAD", new Legacy("SKULL_ITEM", 3));
         return Map.copyOf(table);
     }
 }

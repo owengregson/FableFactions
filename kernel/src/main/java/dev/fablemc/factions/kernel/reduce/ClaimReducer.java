@@ -13,12 +13,13 @@ import dev.fablemc.factions.kernel.state.KernelState;
 import dev.fablemc.factions.kernel.state.ZoneStats;
 
 /**
- * Claim and zone intents: claim / unclaim / unclaim-all (paged) / admin claim-unclaim / zone set-remove (paged).
+ * Reduces the claim and zone intents: claim / unclaim / unclaim-all (paged) / admin claim-unclaim / zone set-remove (paged).
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only (via {@link Reducer#apply}).
  * <b>Mutability:</b> pure static functions over a confined {@link ReduceSupport} context; no
  * shared mutable state, no IO, no clock, no Bukkit. Behavior is byte-identical to the pre-split
- * monolithic {@code Reducer} (W25-REORG P2a moved this code unchanged).
+ * monolithic {@code Reducer} (W25-REORG P2a moved the code; the P3 sweep standardized the
+ * guard/emission shapes without behavior change).
  */
 final class ClaimReducer {
 
@@ -48,15 +49,14 @@ final class ClaimReducer {
             throw new IllegalStateException("unhandled claim intent: " + i.getClass().getName());
         }
     }
+
     static void claimChunks(ReduceSupport s, ClaimIntent.ClaimChunks c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
-        int actorOrd = s.memberOrd(c.player());
-        if (actorOrd < 0 || FactionHandle.ordinal(s.memberFactionHandle(actorOrd)) != f.idx()) {
-            s.reject(ReasonCode.NOT_IN_FACTION);
+        int actorOrd = s.memberOfOrReject(c.player(), f.idx(), ReasonCode.NOT_IN_FACTION);
+        if (actorOrd < 0) {
             return;
         }
         int claimed = 0;
@@ -98,9 +98,8 @@ final class ClaimReducer {
     }
 
     static void unclaimChunks(ReduceSupport s, ClaimIntent.UnclaimChunks c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         int unclaimed = 0;
@@ -132,9 +131,8 @@ final class ClaimReducer {
     }
 
     static void adminClaimChunks(ReduceSupport s, ClaimIntent.AdminClaimChunks c) {
-        Faction f = s.resolve(c.faction());
+        Faction f = s.factionOrReject(c.faction());
         if (f == null) {
-            s.reject(ReasonCode.FACTION_NOT_FOUND);
             return;
         }
         for (long key : c.keys()) {
@@ -162,7 +160,7 @@ final class ClaimReducer {
         if (f == null) {
             return;
         }
-        s.removeUpToPageClaims(f.idx(), FactionHandle.WILDERNESS);
+        s.removeUpToPageClaims(f.idx());
         Faction after = s.resolve(factionHandle);
         if (after != null && after.landCount() > 0) {
             s.continuation(new ClaimIntent.UnclaimAllPage(factionHandle, 0, actor));

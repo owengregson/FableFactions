@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed {@code pre-defined.yml} registry (pvp-resources.md §4).
+ * Typed {@code pre-defined.yml} registry (ref-resources.md §4).
  *
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}; predefined seeding

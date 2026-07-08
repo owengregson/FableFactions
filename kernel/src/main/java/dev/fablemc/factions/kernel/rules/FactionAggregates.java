@@ -9,7 +9,7 @@ import dev.fablemc.factions.kernel.state.PlayerLedger;
 /**
  * Derived faction aggregates (member count, total power, any-member-online) computed by scanning
  * the ledger. These mirror the reference {@code getFactionPower}/{@code countMembers} scans
- * (pvp-services.md §5.4/§6.2).
+ * (ref-services.md §5.4/§6.2).
  *
  * <p><b>Owning thread(s):</b> pure static; the reducer's claim / power / membership branches use
  * them. <b>Mutability:</b> stateless. <b>Reducer rule:</b> the {@link Faction} record carries a

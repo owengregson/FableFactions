@@ -10,6 +10,9 @@ package dev.fablemc.factions.core.storage;
  */
 public final class H2Dialect implements SqlDialect {
 
+    /** The pinned {@link #name()} value ({@code ff_meta} / logging vocabulary). */
+    public static final String NAME = "h2";
+
     /** The shared stateless instance. */
     public static final H2Dialect INSTANCE = new H2Dialect();
 
@@ -18,13 +21,13 @@ public final class H2Dialect implements SqlDialect {
 
     @Override
     public String name() {
-        return "h2";
+        return NAME;
     }
 
     @Override
     public String driverClassName() {
-        // shaded/relocated first, canonical fallback (pvp-data §6)
-        if (classPresent("dev.fablemc.factions.lib.h2.Driver")) {
+        // shaded/relocated first, canonical fallback (ref-data §6)
+        if (SqlDialect.classPresent("dev.fablemc.factions.lib.h2.Driver")) {
             return "dev.fablemc.factions.lib.h2.Driver";
         }
         return "org.h2.Driver";
@@ -43,14 +46,5 @@ public final class H2Dialect implements SqlDialect {
         return "MERGE INTO `" + table + "` (" + SqlDialect.columnList(columns) + ") KEY("
                 + SqlDialect.columnList(keyColumns) + ") VALUES ("
                 + SqlDialect.placeholders(columns.length) + ")";
-    }
-
-    private static boolean classPresent(String name) {
-        try {
-            Class.forName(name, false, H2Dialect.class.getClassLoader());
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
     }
 }

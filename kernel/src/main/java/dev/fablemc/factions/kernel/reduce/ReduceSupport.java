@@ -32,8 +32,8 @@ import dev.fablemc.factions.kernel.vocab.FactionAuditAction;
 import dev.fablemc.factions.kernel.vocab.NotifyPredicate;
 
 /**
- * The reducer's confined working context plus the effect-buffer, envelope-rng, and common-lookup
- * helpers shared by every per-domain reducer (W25-REORG P2a). One instance exists per
+ * Owns the reducer's per-intent working context: the effect buffer, the envelope rng, and the
+ * common-lookup/guard helpers shared by every per-domain reducer (W25-REORG P2a). One instance exists per
  * {@link Reducer#apply} call and is never published while mutable.
  *
  * <p><b>Owning thread:</b> the {@code fable-kernel} writer only. <b>Mutability:</b> confined,
@@ -255,36 +255,36 @@ final class ReduceSupport {
 
     /** Clears the faction of up to a page of members; returns how many were cleared. */
     int clearMembersPage(int factionOrd) {
-        PlayerLedger l = state.ledger();
-        int hw = l.highWater();
+        PlayerLedger ledger = state.ledger();
+        int highWater = ledger.highWater();
         int cleared = 0;
-        for (int i = 0; i < hw && cleared < Reducer.PAGE_SIZE; i++) {
-            if (l.has(i) && FactionHandle.ordinal(l.factionHandle(i)) == factionOrd) {
-                UUID uuid = l.uuid(i);
-                l = l.withFactionHandle(i, NO_HANDLE).withRankIdx(i, 0);
+        for (int i = 0; i < highWater && cleared < Reducer.PAGE_SIZE; i++) {
+            if (ledger.has(i) && FactionHandle.ordinal(ledger.factionHandle(i)) == factionOrd) {
+                UUID uuid = ledger.uuid(i);
+                ledger = ledger.withFactionHandle(i, NO_HANDLE).withRankIdx(i, 0);
                 emit(new MembershipEffect.MemberLeft(seq, origin,
                         state.factions().handleOf(factionOrd), uuid, false));
                 cleared++;
             }
         }
-        state = state.withLedger(l);
+        state = state.withLedger(ledger);
         return cleared;
     }
 
     int migrateMembersPage(int fromOrd, int toHandle, int toDefaultRankIdx) {
-        PlayerLedger l = state.ledger();
-        int hw = l.highWater();
+        PlayerLedger ledger = state.ledger();
+        int highWater = ledger.highWater();
         int moved = 0;
-        for (int i = 0; i < hw && moved < Reducer.PAGE_SIZE; i++) {
-            if (l.has(i) && FactionHandle.ordinal(l.factionHandle(i)) == fromOrd) {
-                UUID uuid = l.uuid(i);
-                l = l.withFactionHandle(i, toHandle).withRankIdx(i, toDefaultRankIdx)
+        for (int i = 0; i < highWater && moved < Reducer.PAGE_SIZE; i++) {
+            if (ledger.has(i) && FactionHandle.ordinal(ledger.factionHandle(i)) == fromOrd) {
+                UUID uuid = ledger.uuid(i);
+                ledger = ledger.withFactionHandle(i, toHandle).withRankIdx(i, toDefaultRankIdx)
                         .withJoinedAt(i, epochMillis);
                 emit(new MembershipEffect.MemberJoined(seq, origin, toHandle, uuid));
                 moved++;
             }
         }
-        state = state.withLedger(l);
+        state = state.withLedger(ledger);
         return moved;
     }
 

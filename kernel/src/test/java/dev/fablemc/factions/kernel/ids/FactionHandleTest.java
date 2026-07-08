@@ -6,7 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** Pack/unpack invariants for the generation-tagged {@link FactionHandle} codec. */
+/**
+ * Pack/unpack invariants for the generation-tagged {@link FactionHandle} codec.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class FactionHandleTest {
 
     @Test

@@ -1,5 +1,7 @@
 package dev.fablemc.factions.kernel.state;
 
+import java.util.Arrays;
+
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 
@@ -147,7 +149,7 @@ public final class RegionTable {
 
     private static int[] newFilled(int cap) {
         int[] a = new int[cap];
-        java.util.Arrays.fill(a, FactionHandle.WILDERNESS);
+        Arrays.fill(a, FactionHandle.WILDERNESS);
         return a;
     }
 
@@ -169,8 +171,8 @@ public final class RegionTable {
                 }
             }
             if (count == keys.length) {
-                keys = java.util.Arrays.copyOf(keys, count << 1);
-                owners = java.util.Arrays.copyOf(owners, count << 1);
+                keys = Arrays.copyOf(keys, count << 1);
+                owners = Arrays.copyOf(owners, count << 1);
             }
             keys[count] = chunkKey;
             owners[count] = ownerHandle;

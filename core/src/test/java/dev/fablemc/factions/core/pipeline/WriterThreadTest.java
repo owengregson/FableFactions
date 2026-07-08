@@ -13,19 +13,19 @@ import java.util.logging.Logger;
 
 import org.junit.jupiter.api.Test;
 
+import dev.fablemc.factions.kernel.effect.ClaimEffect;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.effect.FeedbackEffect;
+import dev.fablemc.factions.kernel.effect.SystemEffect;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.intent.Intent;
 import dev.fablemc.factions.kernel.intent.IntentEnvelope;
 import dev.fablemc.factions.kernel.intent.Origin;
+import dev.fablemc.factions.kernel.intent.PrefIntent;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.reduce.Reducer;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
-import dev.fablemc.factions.kernel.intent.PrefIntent;
-import dev.fablemc.factions.kernel.intent.EconomyIntent;
-import dev.fablemc.factions.kernel.effect.SystemEffect;
-import dev.fablemc.factions.kernel.effect.FeedbackEffect;
-import dev.fablemc.factions.kernel.effect.ClaimEffect;
 
 /**
  * The writer's failure boundary + AM-5 continuation contract (work order W2b §3). Exercised

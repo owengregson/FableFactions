@@ -6,7 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** Fold-casing and uniqueness authority for {@link NameIndex}. */
+/**
+ * Fold-casing and uniqueness authority for {@link NameIndex}.
+ *
+ * <p><b>Owning thread(s):</b> the JUnit worker (single-threaded). <b>Mutability:</b>
+ * test-confined fixtures; no shared state between tests.
+ */
 class NameIndexTest {
 
     @Test

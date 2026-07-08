@@ -3,7 +3,7 @@ package dev.fablemc.factions.kernel.rules;
 import dev.fablemc.factions.kernel.state.InviteTable;
 
 /**
- * Invite time-to-live rules (pvp-services.md §7.2, pvp-bugs-concurrency Appendix).
+ * Invite time-to-live rules (ref-services.md §7.2, ref-bugs-concurrency Appendix).
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
  * an invite is active while {@code now <= createdAt + max(1, ttlHours)*3600_000}; the reducer

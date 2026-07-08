@@ -8,7 +8,7 @@ import dev.fablemc.factions.kernel.state.RelationKind;
 
 /**
  * The protection decision engine — one static, pure, zero-allocation entry point
- * (proposal-C §5c, pvp-engines.md §3.1). Every build / interact / pvp / explosion / fire decision
+ * (proposal-C §5c, ref-engines.md §3.1). Every build / interact / pvp / explosion / fire decision
  * routes through {@link #decide}.
  *
  * <p><b>Owning thread(s):</b> any reader thread, on whatever region/main thread the event fires.
@@ -36,17 +36,17 @@ public final class Verdicts {
         if (owner == FactionHandle.WILDERNESS) {
             return Verdict.ALLOW;
         }
-        ConfigImage cfg = snap.config();
+        ConfigImage config = snap.config();
         int ownerOrd = FactionHandle.ordinal(owner);
 
         if (ownerOrd == FactionHandle.SAFEZONE_ORDINAL) {
-            if (!cfg.zones().safeZoneEnabled()) {
+            if (!config.zones().safeZoneEnabled()) {
                 return Verdict.ALLOW;
             }
             return zoneVerdict(action, Verdict.DENY_SAFEZONE);
         }
         if (ownerOrd == FactionHandle.WARZONE_ORDINAL) {
-            if (!cfg.zones().warZoneEnabled()) {
+            if (!config.zones().warZoneEnabled()) {
                 return Verdict.ALLOW;
             }
             return warzoneVerdict(action);
@@ -61,15 +61,15 @@ public final class Verdicts {
         switch (action) {
             case Action.EXPLOSION:
                 return ownerF.flag(Faction.FLAG_EXPLOSIONS,
-                        cfg.flagDefaults().defaultOf(Faction.FLAG_EXPLOSIONS))
+                        config.flagDefaults().defaultOf(Faction.FLAG_EXPLOSIONS))
                         ? Verdict.ALLOW : Verdict.DENY_EXPLOSIONS;
             case Action.FIRE_SPREAD:
                 return ownerF.flag(Faction.FLAG_FIRE_SPREAD,
-                        cfg.flagDefaults().defaultOf(Faction.FLAG_FIRE_SPREAD))
+                        config.flagDefaults().defaultOf(Faction.FLAG_FIRE_SPREAD))
                         ? Verdict.ALLOW : Verdict.DENY_FIRE;
             case Action.PVP:
                 return ownerF.flag(Faction.FLAG_PVP,
-                        cfg.flagDefaults().defaultOf(Faction.FLAG_PVP))
+                        config.flagDefaults().defaultOf(Faction.FLAG_PVP))
                         ? Verdict.ALLOW : Verdict.DENY_PVP_FLAG;
             default:
                 return buildLikeVerdict(snap, actorBits, owner, ownerOrd);

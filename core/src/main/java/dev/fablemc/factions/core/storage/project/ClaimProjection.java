@@ -12,6 +12,8 @@ import dev.fablemc.factions.kernel.ids.ChunkKeys;
  */
 public final class ClaimProjection {
 
+    private static final String[] BOARD_KEY = {"world", "cx", "cz"};
+
     private ClaimProjection() {
     }
 
@@ -19,19 +21,16 @@ public final class ClaimProjection {
         String world = ctx.world(x.worldIdx());
         String fid = ctx.factionId(x.faction());
         if (world != null && fid != null) {
-            ctx.add(new ProjectionOp(ctx.dialect().upsert("board",
-                    new String[] {"world", "cx", "cz", "faction_id"},
-                    new String[] {"world", "cx", "cz"}),
-                    new Object[] {world, ChunkKeys.x(x.key()), ChunkKeys.z(x.key()), fid}));
+            ctx.upsert("board", new String[] {"world", "cx", "cz", "faction_id"}, BOARD_KEY,
+                    world, ChunkKeys.x(x.key()), ChunkKeys.z(x.key()), fid);
         }
     }
 
     public static void apply(ProjectionContext ctx, ClaimEffect.ClaimRemoved x) {
         String world = ctx.world(x.worldIdx());
         if (world != null) {
-            ctx.add(new ProjectionOp(ctx.dialect().deleteByKey("board",
-                    new String[] {"world", "cx", "cz"}),
-                    new Object[] {world, ChunkKeys.x(x.key()), ChunkKeys.z(x.key())}));
+            ctx.op(ctx.dialect().deleteByKey("board", BOARD_KEY),
+                    world, ChunkKeys.x(x.key()), ChunkKeys.z(x.key()));
         }
     }
 }

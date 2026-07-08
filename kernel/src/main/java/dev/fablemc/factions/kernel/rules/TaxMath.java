@@ -4,7 +4,7 @@ import dev.fablemc.factions.kernel.config.EconomyConfig;
 
 /**
  * Periodic bank-tax math, transcribed from {@code EngineEconomy.applyFactionTaxesNow}
- * (pvp-services.md §7 tax; pvp-engines.md §3.8.5).
+ * (ref-services.md §7 tax; ref-engines.md §3.8.5).
  *
  * <p><b>Owning thread(s):</b> pure static; the reducer's {@code TaxSweep} pages call it.
  * <b>Mutability:</b> stateless. <b>Reducer rule:</b> tax is a money sink, rounded through the

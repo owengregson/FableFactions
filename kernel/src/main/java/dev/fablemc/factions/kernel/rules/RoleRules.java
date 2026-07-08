@@ -4,8 +4,8 @@ import dev.fablemc.factions.kernel.config.RoleConfig;
 import dev.fablemc.factions.kernel.state.Rank;
 
 /**
- * Rank / custom-role authority and validity rules (pvp-services.md §7.1/§7.8,
- * pvp-commands-admin.md §5). Pure static functions shared by the command layer and reducer.
+ * Rank / custom-role authority and validity rules (ref-services.md §7.1/§7.8,
+ * ref-commands-admin.md §5). Pure static functions shared by the command layer and reducer.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
  * the reducer applies role mutations after these gates pass.

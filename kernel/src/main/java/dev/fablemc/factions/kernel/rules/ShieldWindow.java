@@ -4,7 +4,7 @@ import dev.fablemc.factions.kernel.state.Faction;
 
 /**
  * War-shield active-window computation (F6), transcribed from the reference
- * {@code FactionModel.isShieldActive()} (pvp-data.md §war-shield; pvp-commands-admin.md §2.8).
+ * {@code FactionModel.isShieldActive()} (ref-data.md §war-shield; ref-commands-admin.md §2.8).
  *
  * <p><b>Owning thread(s):</b> pure static — the reducer's overclaim gate and the command layer
  * both call it. <b>Mutability:</b> stateless. <b>Reducer rule:</b> the kernel reads time only via

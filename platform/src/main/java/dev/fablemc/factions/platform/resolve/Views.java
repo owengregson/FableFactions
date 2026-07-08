@@ -1,13 +1,13 @@
 package dev.fablemc.factions.platform.resolve;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import dev.fablemc.factions.platform.probe.Probes;
 
 /**
  * Boot-resolved {@link MethodHandle}s over {@link InventoryView} plus rawSlot fallback
@@ -32,14 +32,13 @@ public final class Views {
     private static final @Nullable MethodHandle CLICKED;
 
     static {
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-        TOP = findVirtualQuiet(lookup, InventoryView.class, "getTopInventory",
+        TOP = Probes.virtualHandle(InventoryView.class, "getTopInventory",
                 MethodType.methodType(Inventory.class));
-        BOTTOM = findVirtualQuiet(lookup, InventoryView.class, "getBottomInventory",
+        BOTTOM = Probes.virtualHandle(InventoryView.class, "getBottomInventory",
                 MethodType.methodType(Inventory.class));
-        TITLE = findVirtualQuiet(lookup, InventoryView.class, "getTitle",
+        TITLE = Probes.virtualHandle(InventoryView.class, "getTitle",
                 MethodType.methodType(String.class));
-        CLICKED = findVirtualQuiet(lookup, InventoryClickEvent.class, "getClickedInventory",
+        CLICKED = Probes.virtualHandle(InventoryClickEvent.class, "getClickedInventory",
                 MethodType.methodType(Inventory.class));
     }
 
@@ -109,16 +108,6 @@ public final class Views {
         try {
             return (Inventory) handle.invoke(view);
         } catch (Throwable failure) {
-            return null;
-        }
-    }
-
-    private static @Nullable MethodHandle findVirtualQuiet(
-            @NotNull MethodHandles.Lookup lookup, @NotNull Class<?> owner, @NotNull String name,
-            @NotNull MethodType type) {
-        try {
-            return lookup.findVirtual(owner, name, type);
-        } catch (ReflectiveOperationException | LinkageError absent) {
             return null;
         }
     }

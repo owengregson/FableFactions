@@ -1,7 +1,7 @@
 package dev.fablemc.factions.kernel.config;
 
 /**
- * Typed {@code factions.economy.*} configuration (pvp-resources.md §1.6, pvp-services.md §2.1).
+ * Typed {@code factions.economy.*} configuration (ref-resources.md §1.6, ref-services.md §2.1).
  *
  * <p><b>Owning thread(s):</b> parsed in {@code :core}, read on any thread. <b>Mutability:</b>
  * immutable value. <b>Reducer rule:</b> swapped whole via {@code SwapConfig}.

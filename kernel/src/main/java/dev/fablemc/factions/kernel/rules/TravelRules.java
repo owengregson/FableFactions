@@ -5,7 +5,7 @@ import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.state.WarpTable;
 
 /**
- * Home / warp validation (pvp-services.md §7.3, pvp-commands-misc.md travel). Pure static helpers.
+ * Home / warp validation (ref-services.md §7.3, ref-commands-misc.md travel). Pure static helpers.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
  * a NEW warp is capped by {@code limits.maxWarps}; the per-use cost is clamped {@code >= 0} at
@@ -17,13 +17,13 @@ public final class TravelRules {
     }
 
     /** {@code null} when {@code faction} may set (create/update) warp {@code name}. */
-    public static ReasonCode validateSetWarp(ConfigImage cfg, WarpTable warps, int factionOrdinal,
+    public static ReasonCode validateSetWarp(ConfigImage config, WarpTable warps, int factionOrdinal,
                                              String name) {
         if (name == null || name.trim().isEmpty()) {
             return ReasonCode.WARP_NOT_FOUND;
         }
         boolean isNew = warps.get(factionOrdinal, name) == null;
-        int max = cfg.limits().maxWarps();
+        int max = config.limits().maxWarps();
         if (isNew && max > 0 && warps.countForFaction(factionOrdinal) >= max) {
             return ReasonCode.WARP_LIMIT_REACHED;
         }

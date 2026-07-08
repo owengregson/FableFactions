@@ -4,7 +4,7 @@ import dev.fablemc.factions.kernel.config.EconomyConfig;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 
 /**
- * Bank deposit / withdraw / transfer validation (pvp-engines.md §3.8). Pure static functions
+ * Bank deposit / withdraw / transfer validation (ref-engines.md §3.8). Pure static functions
  * shared by the command layer and reducer.
  *
  * <p><b>Owning thread(s):</b> pure static. <b>Mutability:</b> stateless. <b>Reducer rule:</b>
