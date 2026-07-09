@@ -1,4 +1,4 @@
-# Known issues — v1.0.0-beta.1
+# Known issues — v1.0.0-beta.2
 
 The wave-5 adversarial review surfaced 46 confirmed findings. Every **critical** (item
 duplication, money duplication, state corruption, dead protection) and every **high**

@@ -34,7 +34,7 @@ Full design details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | **Roles & flags** | Custom roles with priorities and chat prefixes, per-faction flags, faction audit log |
 | **Merges** | Full faction merges via request/accept flow — members, land, and bank combined atomically |
 | **Predefined factions** | Server-defined presets (spawn factions, staff factions) managed in `pre-defined.yml` |
-| **Localization** | Fully externalized message catalog (MiniMessage) with a per-player `/f language` seam and a locale waterfall. English ships in v1.0.0-beta.1; additional translations are planned once they can be kept in parity |
+| **Localization** | Fully externalized message catalog (MiniMessage) with a per-player `/f language` seam and a locale waterfall. English ships in v1.0.0-beta.2; additional translations are planned once they can be kept in parity |
 | **Integrations** | Vault, WorldGuard, WorldEdit, PlaceholderAPI, Essentials/EssentialsX, dynmap, LWC/LWCX, DiscordSRV, EzCountdown, TeamsAPI · bStats metrics · update checker |
 
 ## 🧩 Compatibility
@@ -133,7 +133,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and [docs/A
 
 ## 🐛 Support & Bug Reports
 
-Found a bug or have a feature request? Open an issue at [github.com/owengregson/FableFactions/issues](https://github.com/owengregson/FableFactions/issues). Please include your server platform, Minecraft version, and the plugin version (`1.0.0-beta.1` is the current first beta).
+Found a bug or have a feature request? Open an issue at [github.com/owengregson/FableFactions/issues](https://github.com/owengregson/FableFactions/issues). Please include your server platform, Minecraft version, and the plugin version (`1.0.0-beta.2` is the current first beta).
 
 ## License
 

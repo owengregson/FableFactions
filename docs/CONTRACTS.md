@@ -29,7 +29,7 @@ docs/  (this documentation)
 
 Gradle module ids: `:kernel :api :platform :core :compat-folia :compat-modern :probe`
 (compat projectDirs remapped as in Mental). `group = "dev.fablemc"`,
-`version` in gradle.properties (`1.0.0-beta.1`). Root subprojects block: toolchain 25,
+`version` in gradle.properties (`1.0.0-beta.2`). Root subprojects block: toolchain 25,
 `options.release = 17`, `-parameters`, UTF-8, JUnit platform.
 
 ---
