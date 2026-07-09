@@ -163,7 +163,7 @@ public final class ConfigKeys {
 
     // ── database.yml ────────────────────────────────────────────────────────────────────────
     public static final String DB_TYPE = "type";
-    public static final String DB_H2_FILE = "h2.file";
+    public static final String DB_FILE = "hsqldb.file";
     public static final String DB_MYSQL_HOST = "mysql.host";
     public static final String DB_MYSQL_PORT = "mysql.port";
     public static final String DB_MYSQL_DATABASE = "mysql.database";

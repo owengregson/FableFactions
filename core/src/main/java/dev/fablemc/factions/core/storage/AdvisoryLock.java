@@ -16,9 +16,9 @@ import javax.sql.DataSource;
  * <ul>
  *   <li><b>MySQL:</b> {@code SELECT GET_LOCK('fablefactions:<db>', 5)} on a held connection
  *       (connection-scoped; released on {@link #close()}).</li>
- *   <li><b>H2:</b> a heartbeat-and-fence lock row in {@code ff_meta} (owner UUID + expiry),
+ *   <li><b>Embedded (HSQLDB):</b> a heartbeat-and-fence lock row in {@code ff_meta} (owner UUID + expiry),
  *       refreshed every ~15s by {@code fable-storage}; a takeover is possible only after expiry.
- *       Short-lived connections are used so H2's pool-of-1 is never starved.</li>
+ *       Short-lived connections are used so the embedded pool-of-1 is never starved.</li>
  * </ul>
  *
  * <p><b>Owning thread(s):</b> acquired on the boot thread; {@link #heartbeat()} on
@@ -63,7 +63,7 @@ public final class AdvisoryLock implements AutoCloseable {
      * Attempts to acquire the lock for {@code dbKey}. Returns the held lock, or {@code null} if a
      * live instance already holds it (a second boot refuses read-write). {@code onFenceLost} is
      * invoked (once) by {@link #heartbeat()} if this instance later discovers it no longer owns the
-     * fence — an H2 takeover after expiry, or a dropped MySQL {@code GET_LOCK} connection — so the
+     * fence — an embedded-backend takeover after expiry, or a dropped MySQL {@code GET_LOCK} connection — so the
      * caller can disable the plugin loudly rather than keep writing behind a stolen lock (AM-11).
      */
     public static AdvisoryLock tryAcquire(DataSource dataSource, SqlDialect dialect, String dbKey,
@@ -73,11 +73,11 @@ public final class AdvisoryLock implements AutoCloseable {
         if (MySqlDialect.NAME.equals(dialect.name())) {
             return tryAcquireMysql(dataSource, lockName, owner, ttlMillis, clock, onFenceLost);
         }
-        return tryAcquireH2(dataSource, lockName, owner, ttlMillis, clock, onFenceLost);
+        return tryAcquireEmbedded(dataSource, lockName, owner, ttlMillis, clock, onFenceLost);
     }
 
     /**
-     * Refreshes the fence AND verifies we still own it (AM-11 fencing, finding #4). H2: the expiry
+     * Refreshes the fence AND verifies we still own it (AM-11 fencing, finding #4). Embedded: the expiry
      * bump is conditioned on us still being {@code lock_owner}; if it updates zero rows another
      * instance took over after our expiry — we fire {@code onFenceLost} and go read-only. MySQL: the
      * {@code GET_LOCK} is connection-scoped, so a dropped/invalid lock connection means the lock was
@@ -99,7 +99,7 @@ public final class AdvisoryLock implements AutoCloseable {
             ps.setString(2, owner.toString());
             int updated = ps.executeUpdate();
             if (updated != 1) {
-                fenceLost("H2 advisory lock was taken over by another instance (our fence expired)");
+                fenceLost("embedded advisory lock was taken over by another instance (our fence expired)");
             }
         }
     }
@@ -170,7 +170,7 @@ public final class AdvisoryLock implements AutoCloseable {
         }
     }
 
-    private static AdvisoryLock tryAcquireH2(DataSource dataSource, String lockName, UUID owner,
+    private static AdvisoryLock tryAcquireEmbedded(DataSource dataSource, String lockName, UUID owner,
                                              long ttlMillis, LongSupplier clock, Runnable onFenceLost)
             throws SQLException {
         long now = clock.getAsLong();

@@ -7,8 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The relational projection DDL (proposal-C §6.2). Identical across H2 and MySQL — only the
- * upsert shape (in {@link SqlDialect}) differs. All 12 reference-parity tables are created,
+ * The relational projection DDL (proposal-C §6.2). Identical across HSQLDB and MySQL. All 12 reference-parity tables are created,
  * including {@code merge_requests} (the reference registered but never created it — bug fixed,
  * ref-data §3.12), plus the FableFactions control tables {@code ff_meta}, {@code ff_escrows},
  * {@code ff_blobs}.
@@ -22,7 +21,7 @@ import java.util.List;
  * </ul>
  *
  * <p><b>Owning thread(s):</b> boot thread only. <b>Mutability:</b> stateless static DDL. Backtick
- * quoting works in both H2 ({@code MODE=MySQL}) and MySQL.
+ * quoting works in both HSQLDB ({@code sql.syntax_mys=true}) and MySQL.
  */
 public final class Schema {
 

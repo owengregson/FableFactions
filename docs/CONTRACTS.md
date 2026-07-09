@@ -29,7 +29,7 @@ docs/  (this documentation)
 
 Gradle module ids: `:kernel :api :platform :core :compat-folia :compat-modern :probe`
 (compat projectDirs remapped as in Mental). `group = "dev.fablemc"`,
-`version` in gradle.properties (`1.0.0-beta.2`). Root subprojects block: toolchain 25,
+`version` in gradle.properties (`1.0.0-beta.3`). Root subprojects block: toolchain 25,
 `options.release = 17`, `-parameters`, UTF-8, JUnit platform.
 
 ---
@@ -240,7 +240,7 @@ core/src/main/java/dev/fablemc/factions/core/
               EffectSink.java  EffectFanout.java
   journal/    EffectJournal.java  JournalCodec.java  JournalReplay.java
   storage/    StorageProjector.java  Schema.java  SchemaMigrator.java  SqlDialect.java
-              H2Dialect.java  MySqlDialect.java  BaselineLoader.java  AdvisoryLock.java
+              HsqldbDialect.java  MySqlDialect.java  BaselineLoader.java  AdvisoryLock.java
               the (removed) legacy importer.java  Blobs.java
   text/       Messages.java            (render MessageKey+args → Component → TextPort)
   messages/   MessageCatalog.java  LocaleTables.java
@@ -359,8 +359,8 @@ UUID, org.bukkit.Location, enums defined in `:api`).
 7. **Logging**: `plugin.getLogger()` only; boot report single-line-per-subsystem (B10);
    never log-and-swallow — either handle or rethrow to the AM-9 boundary.
 8. **No new deps** beyond the version catalog without updating the scaffold work order:
-   adventure (api, minimessage, legacy serializer), HikariCP 4.0.3, h2 1.4.200,
-   mysql-connector-j 8.0.33, bstats 3.2.1, annotations; test: junit5, jqwik, archunit,
+   adventure (api, minimessage, legacy serializer), commons-dbcp2/pool2, hsqldb (jdk8),
+   mysql-connector-j, bstats, annotations; test: junit5, jqwik, archunit,
    testcontainers (mysql), jmh (kept out of `check`-critical path where slow).
 9. **File ownership is exclusive.** Your work order lists your files; do not create or edit
    outside them. Shared-looking needs (a helper another agent owns) → use the contract

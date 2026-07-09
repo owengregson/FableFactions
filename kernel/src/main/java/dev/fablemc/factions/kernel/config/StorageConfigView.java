@@ -12,7 +12,7 @@ package dev.fablemc.factions.kernel.config;
  */
 public record StorageConfigView(
         String type,
-        String h2File,
+        String embeddedFile,
         String mysqlHost,
         int mysqlPort,
         String mysqlDatabase,
@@ -20,10 +20,10 @@ public record StorageConfigView(
         int mysqlPoolSize,
         boolean jaloquentLogging) {
 
-    /** The reference-default storage view (embedded H2). */
+    /** The reference-default storage view (embedded HSQLDB). */
     public static StorageConfigView defaults() {
         return new StorageConfigView(
-                "h2",
+                "hsqldb",
                 "data/factions",
                 "localhost",
                 3306,

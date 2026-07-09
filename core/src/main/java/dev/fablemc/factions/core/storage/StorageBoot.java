@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -41,15 +42,18 @@ public final class StorageBoot implements AutoCloseable {
     private final BasicDataSource dataSource;
     private final SqlDialect dialect;
     private final String backendLabel;
+    private final boolean shutdownOnClose;
     private final AdvisoryLock lock;
     private final StorageProjector projector;
     private final BaselineLoader loader;
 
     private StorageBoot(BasicDataSource dataSource, SqlDialect dialect, String backendLabel,
-                        AdvisoryLock lock, StorageProjector projector, BaselineLoader loader) {
+                        boolean shutdownOnClose, AdvisoryLock lock, StorageProjector projector,
+                        BaselineLoader loader) {
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.backendLabel = backendLabel;
+        this.shutdownOnClose = shutdownOnClose;
         this.lock = lock;
         this.projector = projector;
         this.loader = loader;
@@ -71,10 +75,10 @@ public final class StorageBoot implements AutoCloseable {
      * caller's step after the baseline load and journal replay.
      *
      * @param view          the parsed {@code database.yml} storage view (kernel config)
-     * @param mysqlPassword the MySQL wallet password (absent from the kernel view for hygiene; empty for H2)
-     * @param dataFolder    the plugin data folder (H2 file DB is resolved under it)
+     * @param mysqlPassword the MySQL wallet password (absent from the kernel view for hygiene; empty for the embedded backend)
+     * @param dataFolder    the plugin data folder (the embedded file DB is resolved under it)
      * @param owner         this instance's advisory-lock owner UUID
-     * @param lockTtlMillis the H2 lock fence TTL (heartbeat-refreshed)
+     * @param lockTtlMillis the embedded lock fence TTL (heartbeat-refreshed)
      * @param clock         the wall clock (lock fence + projection {@code created_at})
      * @param worldIndex    world name → dense worldIdx (AM-15), used by the baseline loader
      * @param worldResolver worldIdx → world name (AM-15), used by the projector
@@ -90,9 +94,12 @@ public final class StorageBoot implements AutoCloseable {
         Objects.requireNonNull(view, "view");
         Objects.requireNonNull(dataFolder, "dataFolder");
         boolean mysql = MySqlDialect.NAME.equalsIgnoreCase(view.type());
-        SqlDialect dialect = mysql ? MySqlDialect.INSTANCE : H2Dialect.INSTANCE;
-        String label = mysql ? "MySQL" : "H2";
-        String dbKey = mysql ? view.mysqlDatabase() : view.h2File();
+        SqlDialect dialect = mysql ? MySqlDialect.INSTANCE : HsqldbDialect.INSTANCE;
+        String label = mysql ? "MySQL" : "HSQLDB";
+        String dbKey = mysql ? view.mysqlDatabase() : view.embeddedFile();
+        // File DBs get an explicit SHUTDOWN on close (clean checkpoint, no log replay on the
+        // next boot); mem: handles (tests) must survive the pool and are never shut down here.
+        boolean shutdownOnClose = !mysql && !view.embeddedFile().startsWith("mem:");
 
         BasicDataSource ds = buildPool(view, dialect, mysqlPassword, dataFolder, mysql);
         AdvisoryLock lock = null;
@@ -107,7 +114,7 @@ public final class StorageBoot implements AutoCloseable {
             }
             StorageProjector projector = new StorageProjector(ds, dialect, worldResolver, clock, ack, log);
             BaselineLoader loader = new BaselineLoader(ds, worldIndex, log);
-            return new StorageBoot(ds, dialect, label, lock, projector, loader);
+            return new StorageBoot(ds, dialect, label, shutdownOnClose, lock, projector, loader);
         } catch (SQLException ex) {
             releaseLock(lock);
             closeQuietly(ds);
@@ -125,7 +132,7 @@ public final class StorageBoot implements AutoCloseable {
             try {
                 lock.close();
             } catch (RuntimeException ignored) {
-                // pool close below drops the connection; H2 fence expiry recovers a leaked row
+                // pool close below drops the connection; fence expiry recovers a leaked row
             }
         }
     }
@@ -149,7 +156,7 @@ public final class StorageBoot implements AutoCloseable {
         }
     }
 
-    /** {@code "H2"} / {@code "MySQL"} for the bStats database-backend chart (no DB scan). */
+    /** {@code "HSQLDB"} / {@code "MySQL"} for the bStats database-backend chart (no DB scan). */
     public String backendLabel() {
         return backendLabel;
     }
@@ -222,7 +229,7 @@ public final class StorageBoot implements AutoCloseable {
         }
     }
 
-    /** Refreshes the H2 advisory-lock fence (a no-op for MySQL); driven on an async cadence. */
+    /** Refreshes the embedded advisory-lock fence (ownership check for MySQL); driven on an async cadence. */
     public void heartbeat() {
         try {
             lock.heartbeat();
@@ -236,7 +243,21 @@ public final class StorageBoot implements AutoCloseable {
         try {
             lock.close();
         } finally {
+            shutdownEmbedded();
             closeQuietly(dataSource);
+        }
+    }
+
+    /** Checkpoints + closes an embedded file DB so the next boot skips the log replay. */
+    private void shutdownEmbedded() {
+        if (!shutdownOnClose) {
+            return;
+        }
+        try (Connection conn = dataSource.getConnection();
+             Statement st = conn.createStatement()) {
+            st.execute("SHUTDOWN");
+        } catch (SQLException ignored) {
+            // best-effort: an unclean close is recovered by HSQLDB's log replay on next boot
         }
     }
 
@@ -252,8 +273,10 @@ public final class StorageBoot implements AutoCloseable {
             ds.setPassword(mysqlPassword == null ? "" : mysqlPassword);
             ds.setMaxTotal(Math.max(1, view.mysqlPoolSize()));
         } else {
-            ds.setUrl(h2Url(view.h2File(), dataFolder));
-            ds.setMaxTotal(1);   // single-writer file/mem DB (AM-10)
+            ds.setUrl(embeddedUrl(view.embeddedFile(), dataFolder));
+            ds.setUsername("SA");   // HSQLDB's initial DBA user (created on first connect)
+            ds.setPassword("");
+            ds.setMaxTotal(1);      // single-writer file/mem DB (AM-10)
         }
         return ds;
     }
@@ -267,16 +290,16 @@ public final class StorageBoot implements AutoCloseable {
         }
     }
 
-    /** Builds the H2 JDBC URL: a {@code mem:} handle passes through; otherwise a file DB under the data folder. */
-    private static String h2Url(String h2File, File dataFolder) {
-        if (h2File.startsWith("mem:")) {
-            return "jdbc:h2:" + h2File + ";MODE=MySQL;DB_CLOSE_DELAY=-1";
+    /** Builds the embedded JDBC URL: a {@code mem:} handle passes through; otherwise a file DB under the data folder. */
+    private static String embeddedUrl(String embeddedFile, File dataFolder) {
+        if (embeddedFile.startsWith("mem:")) {
+            return HsqldbDialect.memUrl(embeddedFile.substring("mem:".length()));
         }
-        File file = new File(dataFolder, h2File);
+        File file = new File(dataFolder, embeddedFile);
         File parent = file.getParentFile();
         if (parent != null) {
             parent.mkdirs();
         }
-        return H2Dialect.fileUrl(file.getAbsolutePath());
+        return HsqldbDialect.fileUrl(file.getAbsolutePath());
     }
 }

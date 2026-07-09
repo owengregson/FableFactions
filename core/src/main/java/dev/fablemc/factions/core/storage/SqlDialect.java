@@ -1,22 +1,22 @@
 package dev.fablemc.factions.core.storage;
 
 /**
- * The narrow slice of SQL that differs between H2 and MySQL (AM-10, proposal-C §6.2). The DDL is
- * identical across both backends; only the <b>upsert</b> shape differs (H2 {@code MERGE INTO … KEY(…)}
- * vs MySQL {@code INSERT … ON DUPLICATE KEY UPDATE}) and the explicit driver class name.
+ * The narrow slice of SQL that differs between the embedded HSQLDB backend and MySQL (AM-10,
+ * proposal-C §6.2). The DDL is identical across both backends (HSQLDB runs in MySQL syntax mode),
+ * as is the upsert shape; the dialects carry the explicit driver class names and URL builders.
  *
  * <p><b>Owning thread(s):</b> stateless; used on the {@code fable-storage} thread and at boot.
- * <b>Mutability:</b> immutable. Identifiers are backtick-quoted, which both H2 ({@code MODE=MySQL})
- * and MySQL accept.
+ * <b>Mutability:</b> immutable. Identifiers are backtick-quoted, which both HSQLDB
+ * ({@code sql.syntax_mys=true}) and MySQL accept.
  */
 public interface SqlDialect {
 
-    /** A short backend name ({@code "h2"} / {@code "mysql"}) for logging and {@code ff_meta}. */
+    /** A short backend name ({@code "hsqldb"} / {@code "mysql"}) for logging and {@code ff_meta}. */
     String name();
 
     /**
      * The explicit JDBC driver class name — shaded/relocated first, canonical fallback (per
-     * ref-data §6): the SPI service file is stripped from the shaded jar so Hikari must be told.
+     * ref-data §6): the SPI service file is stripped from the shaded jar so the pool must be told.
      */
     String driverClassName();
 

@@ -1,11 +1,10 @@
+import fable.JvmdgLegTask
+import fable.MergeMultiReleaseTask
+import fable.VerifyDowngradeTask
 import groovy.json.JsonSlurper
-import org.gradle.api.services.BuildService
-import org.gradle.api.services.BuildServiceParameters
-import xyz.wagyourtail.jvmdg.gradle.JVMDowngraderExtension
 
 plugins {
     alias(libs.plugins.shadow)
-    alias(libs.plugins.jvmdowngrader)
 }
 
 dependencies {
@@ -15,9 +14,8 @@ dependencies {
     compileOnly(libs.jetbrains.annotations)
 }
 
-// api-version derives from support-matrix.json's floorApi (the descriptor owns the
-// Bukkit floor). The probe must load on every supported server, so this expansion is
-// identical to core's — a stale literal would fail the whole legacy boot.
+// api-version derives from support-matrix.json's floorApi, identical to core's — the
+// probe must load on every supported server.
 @Suppress("UNCHECKED_CAST")
 val supportMatrix: Map<String, Any> =
     JsonSlurper().parse(rootProject.layout.projectDirectory.file("support-matrix.json").asFile) as Map<String, Any>
@@ -29,92 +27,65 @@ tasks.processResources {
     filesMatching("plugin.yml") { expand(props) }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- *  The probe's OWN mega-jar pipeline (mental-build §3-5), with a DISTINCT jvmdg
- *  prefix (dev/fablemc/factions/probe/lib/jvmdg/) from core's. Distinctness is the
- *  load-bearing D-8 isolation property: two downgraded plugins sharing a same-FQN
- *  pruned jvmdg runtime cross-link and fail on the shared legacy class cache.
- *  (The probe stays TWO-tier — 5 classes, nothing hot; the v57 tier is core-only.)
- * ──────────────────────────────────────────────────────────────────────── */
-
-// Same global-console-capture hazard as core's jvmdg tasks: serialize every jvmdg
-// task across the whole build via the shared lock (registerIfAbsent is name-keyed,
-// so this resolves to the one service core registered) and fence out test JVMs.
-abstract class JvmdgConsoleLock : BuildService<BuildServiceParameters.None>
-
-val jvmdgConsoleLock = gradle.sharedServices.registerIfAbsent("jvmdgConsoleLock", JvmdgConsoleLock::class) {
-    maxParallelUsages.set(1)
-}
-
-val consoleNoisyTasks = listOf(
-    ":kernel:test", ":api:test", ":platform:test", ":core:test",
-    ":compat-folia:test", ":compat-modern:test", ":probe:test",
-    ":kernel:compileTestJava", ":api:compileTestJava", ":platform:compileTestJava",
-    ":core:compileTestJava",
-)
-
-// Warning capture (warnings = build failures). Filters JDK-24+ Unsafe deprecation
-// noise from parallel JVMs that leaks into Gradle's GLOBAL console stream.
-fun failOnJvmdgWarnings(jar: Jar) {
-    val captured = StringBuilder()
-    val sink = StandardOutputListener { text -> captured.append(text) }
-    val logSink = jar.project.layout.buildDirectory.file("jvmdg-stage/${jar.name}-output.log")
-    jar.usesService(jvmdgConsoleLock)
-    jar.mustRunAfter(consoleNoisyTasks)
-    jar.doFirst {
-        logging.addStandardOutputListener(sink)
-        logging.addStandardErrorListener(sink)
-    }
-    jar.doLast {
-        logging.removeStandardOutputListener(sink)
-        logging.removeStandardErrorListener(sink)
-        val text = captured.toString()
-        val file = logSink.get().asFile
-        file.parentFile.mkdirs()
-        file.writeText(text)
-        val jvmNoise = Regex("sun\\.misc\\.Unsafe|Please consider reporting this to the maintainers")
-        val warnings = text.lines()
-            .filter { line -> Regex("(?i)\\b(warn|warning|error)\\b").containsMatchIn(line) }
-            .filterNot { line -> jvmNoise.containsMatchIn(line) }
-        if (warnings.isNotEmpty()) {
-            throw GradleException("jvmdowngrader emitted ${warnings.size} warning/error line(s) during " +
-                "'${jar.name}' (warnings are build failures). First:\n" +
-                warnings.take(20).joinToString("\n") { "    $it" } + "\nFull: ${file.absolutePath}")
-        }
-    }
-}
-
+/*
+ * The probe's own mega-jar pipeline, with a DISTINCT jvmdg prefix from core's.
+ * Distinctness is the load-bearing D-8 isolation property: two downgraded plugins
+ * sharing a same-FQN pruned jvmdg runtime cross-link on the shared legacy class cache.
+ * The probe stays two-tier (v52 base + v61 versions/17) — 5 classes, nothing hot.
+ */
 tasks.shadowJar {
     archiveBaseName.set("FableFactionsProbe")
-    archiveClassifier.set("modern")                                   // intermediate, staged out of build/libs
+    archiveClassifier.set("modern") // intermediate, staged out of build/libs
     destinationDirectory.set(layout.buildDirectory.dir("jvmdg-stage"))
     exclude("META-INF/versions/**")
     exclude("META-INF/services/java.sql.Driver")
 }
 
-val jvmdg = extensions.getByType<JVMDowngraderExtension>()
-
-val downgradeProbeJar = jvmdg.defaultTask
-downgradeProbeJar.configure {
-    inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
-    downgradeTo.set(JavaVersion.VERSION_1_8)
-    multiReleaseOriginal.set(true)                                    // never multiReleaseVersions (1.3.6 drops v61)
-    classpath = sourceSets["main"].compileClasspath
-    destinationDirectory.set(layout.buildDirectory.dir("jvmdg-stage"))
-    archiveBaseName.set("FableFactionsProbe")
-    archiveClassifier.set("downgraded")
-    failOnJvmdgWarnings(this)
+val jvmdgCli = configurations.create("jvmdgCli") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+dependencies {
+    jvmdgCli(variantOf(libs.jvmdg.cli) { classifier("all") }) { isTransitive = false }
 }
 
-val probeMegaJar = jvmdg.defaultShadeTask
-probeMegaJar.configure {
-    inputFile.set(downgradeProbeJar.flatMap { it.archiveFile })
-    downgradeTo.set(JavaVersion.VERSION_1_8)
-    shadePath.set { "dev/fablemc/factions/probe/lib/jvmdg/" }        // DISTINCT from core's prefix (D-8)
-    destinationDirectory.set(layout.buildDirectory.dir("libs"))
-    archiveBaseName.set("FableFactionsProbe")
-    archiveClassifier.set("")
-    failOnJvmdgWarnings(this)
+val javaToolchains = extensions.getByType<JavaToolchainService>()
+val jvmdgLauncher = javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(25)) }
+
+fun jvmdgLeg(version: Int) = tasks.register<JvmdgLegTask>("jvmdgLeg$version") {
+    group = "jvmdg"
+    description = "Downgrades + shades the probe jar to class version $version (forked CLI)."
+    inputJar.set(tasks.shadowJar.flatMap { it.archiveFile })
+    classVersion.set(version)
+    shadePrefix.set("dev/fablemc/factions/probe/lib/jvmdg/") // distinct from core's (D-8)
+    cliClasspath.from(jvmdgCli)
+    resolveClasspath.from(sourceSets["main"].compileClasspath)
+    launcher.set(jvmdgLauncher)
+    outputJar.set(layout.buildDirectory.file("jvmdg-stage/FableFactionsProbe-leg$version.jar"))
+    logFile.set(layout.buildDirectory.file("jvmdg-stage/jvmdgLeg$version-output.log"))
 }
 
-tasks.build { dependsOn(probeMegaJar) }
+val leg52 = jvmdgLeg(52)
+val leg61 = jvmdgLeg(61)
+
+val mergeTiers = tasks.register<MergeMultiReleaseTask>("mergeTiers") {
+    group = "jvmdg"
+    description = "Assembles the probe's Multi-Release jar (v52 base / v61 versions-17)."
+    baseJar.set(leg52.flatMap { it.outputJar })
+    tier17Jar.set(leg61.flatMap { it.outputJar })
+    outputJar.set(layout.buildDirectory.file("libs/FableFactionsProbe-${project.version}.jar"))
+}
+
+tasks.build { dependsOn(mergeTiers) }
+
+val verifyDowngrade = tasks.register<VerifyDowngradeTask>("verifyDowngrade") {
+    group = "verification"
+    description = "Fails unless the probe jar is a well-formed two-tier MR set (base <=52, versions/17 <=61, sentinel forked)."
+    jarFile.set(mergeTiers.flatMap { it.outputJar })
+    sentinel.set("dev/fablemc/factions/probe/FableFactionsProbe.class")
+    jvmdgPrefix.set("dev/fablemc/factions/probe/lib/jvmdg/")
+    expectTier13.set(false)
+    report.set(layout.buildDirectory.file("verify-gates/downgrade.txt"))
+}
+
+tasks.named("check") { dependsOn(verifyDowngrade) }

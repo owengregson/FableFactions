@@ -1,6 +1,13 @@
 # Dependency modernization — what shipped and why
 
-**Status: DONE (v1 beta.3).** Wave 5 asked whether the mega-jar could run newer dependencies
+**Status: DONE (v1 beta.3, completed by the build-modernization pass).** The two holds this
+document originally recorded (H2 on the 2.2.x Java-8 line; Adventure on 4.x) were both
+**resolved** after it was written: the embedded database moved to **HSQLDB 2.7.4 (official
+`jdk8` artifact)** — eliminating H2 and its Java-11 floor entirely — and **Adventure 5.2.0
+ships as-is**, normalized per tier by the reworked pipeline (three independent forked jvmdg
+CLI legs `-c 52/57/61` merged by content diff; the old non-deterministic
+multiReleaseOriginal + stub-merge composition is gone). The tables below are the historical
+record of the intermediate beta.3 state. Wave 5 asked whether the mega-jar could run newer dependencies
 across the whole 1.7.10→26.x range. The original question — *bundle a different version per
 Minecraft/Java version* — is unsound (see "Why naïve Multi-Release override does NOT work"
 below: MR overrides can't version-swap a library's class graph). But the project owner's
@@ -20,10 +27,9 @@ and let the same jvmdg pipeline that downgrades our own bytecode downgrade *it* 
 | Text | Adventure 4.26.1 | **held at 4.26.1** (latest 4.x) | see below |
 
 First-party v52/v57/v61 tiers are untouched (`options.release` stays 17), and the jar stays a clean
-base/v13/v17 Multi-Release with no extra tier. Full build + all 7 gates + tests green (the larger
-dep set needed the daemon heap raised to 6g so jvmdg's shade stays under its internal timeout).
+base/v13/v17 Multi-Release with no extra tier. Full build + all 7 gates + tests green.
 
-### Held: Adventure 5.x (deferred, not rejected)
+### Held: Adventure 5.x (deferred, not rejected — since RESOLVED: 5.2.0 shipped)
 
 Adventure 5.2.0 IS consumable via build-high (jvm.version=21 → jvmdg downgrade) with **zero
 `.java` change** — proven green locally. But 5.x pulls in many more modern-JDK APIs

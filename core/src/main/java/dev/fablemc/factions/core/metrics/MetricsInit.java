@@ -36,7 +36,7 @@ public final class MetricsInit {
      * Registers bStats with the four snapshot-fed charts (database backend, total factions, total
      * claims, relation drilldown) when {@code integrations} enables it. A no-op when disabled.
      *
-     * @param backendLabel supplies {@code "H2"}/{@code "MySQL"} for the database-type pie (no DB scan)
+     * @param backendLabel supplies {@code "HSQLDB"}/{@code "MySQL"} for the database-type pie (no DB scan)
      */
     public static void start(JavaPlugin plugin, SnapshotHub snapshots, ConfigImage.Metrics config,
                              Supplier<String> backendLabel) {

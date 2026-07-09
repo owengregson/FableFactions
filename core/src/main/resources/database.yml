@@ -3,13 +3,13 @@
 #
 #  Changes require a full restart (the connection pool is opened once at boot).
 #
-#  type: h2     -> embedded file database (MySQL-compatible mode), zero setup.
+#  type: hsqldb -> embedded file database (MySQL-compatible mode), zero setup.
 #  type: mysql  -> remote MySQL / MariaDB.
 # ─────────────────────────────────────────────────────────────────────────────
 
-type: h2
+type: hsqldb
 
-h2:
+hsqldb:
   # Path relative to the plugin data folder.
   file: data/factions
 

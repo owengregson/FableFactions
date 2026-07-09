@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
 
-import org.h2.jdbcx.JdbcDataSource;
+import org.hsqldb.jdbc.JDBCDataSource;
 import org.junit.jupiter.api.Test;
 
 import dev.fablemc.factions.core.storage.load.BaselineLoader;
@@ -34,9 +34,11 @@ final class EscrowRecoveryTest {
 
     private static final Logger QUIET = Logger.getAnonymousLogger();
 
-    private static DataSource h2(String name) {
-        JdbcDataSource ds = new JdbcDataSource();
-        ds.setURL("jdbc:h2:mem:" + name + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+    private static DataSource embedded(String name) {
+        JDBCDataSource ds = new JDBCDataSource();
+        ds.setUrl(HsqldbDialect.memUrl(name));
+        ds.setUser("SA");
+        ds.setPassword("");
         return ds;
     }
 
@@ -50,11 +52,11 @@ final class EscrowRecoveryTest {
 
     @Test
     void projectorMirrorsOpenEscrowsThenDeletesSettled() throws SQLException {
-        DataSource ds = h2("esc_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("esc_" + UUID.randomUUID().toString().replace('-', '_'));
         try (Connection c = ds.getConnection()) {
             SchemaMigrator.migrate(c);
         }
-        StorageProjector projector = new StorageProjector(ds, H2Dialect.INSTANCE,
+        StorageProjector projector = new StorageProjector(ds, HsqldbDialect.INSTANCE,
                 worldIdx -> worldIdx == 0 ? "world" : null, () -> 1_000L, seq -> { }, QUIET);
 
         AtomicReference<EscrowTable> live = new AtomicReference<>(EscrowTable.empty());
@@ -73,7 +75,7 @@ final class EscrowRecoveryTest {
 
     @Test
     void baselineLoadsOnlyOpenEscrows() throws SQLException {
-        DataSource ds = h2("escload_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("escload_" + UUID.randomUUID().toString().replace('-', '_'));
         try (Connection c = ds.getConnection()) {
             SchemaMigrator.migrate(c);
             try (Statement st = c.createStatement()) {

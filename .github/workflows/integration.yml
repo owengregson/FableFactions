@@ -155,23 +155,14 @@ jobs:
           echo "Running runIntegrationTest${SUFFIX}"
           ./gradlew "runIntegrationTest${SUFFIX}" --stacktrace
 
-      # Backstop for false-green lanes. The run-task harness has been observed to
-      # exit 0 even when the server DIES at boot (e.g. the PaperSpigot 1.7.10
-      # timings NPE: Bukkit.getPluginManager() returns null inside
-      # CustomTimingsHandler.startTiming during MinecraftServer boot). A server
-      # that crashed on boot never actually exercised the plugin, so a "passing"
-      # lane would be a lie. Fail the lane whenever the server log carries the
-      # NMS/Bukkit fatal-crash signature. Runs regardless of the gradle exit code
-      # so it catches the exit-0-but-crashed case. (The real fix belongs in the
-      # gradle integration-test harness / probe; this is the observability guard
-      # until that lands — and it is a no-op when the server booted cleanly.)
       # Truth check: a lane passes ONLY if the probe plugin actually booted inside the
-      # server and reported allPassed. The run-task harness has been observed to exit 0
-      # even when the server DIES at boot (e.g. the PaperSpigot 1.7.10 timings NPE:
-      # Bukkit.getPluginManager() returns null in CustomTimingsHandler.startTiming during
-      # MinecraftServer boot) — a crashed server never wrote probe-results.txt, so its
-      # absence is a hard fail. Also scan the log for a fatal-crash signature. Runs
-      # regardless of the gradle exit code so it catches the exit-0-but-crashed case.
+      # server and reported allPassed. The probe stops the server itself once results
+      # are on disk (-Dfablefactions.probe.shutdown=true, set by the run tasks), but the
+      # run-task harness has been observed to exit 0 even when the server DIES at boot
+      # (e.g. the PaperSpigot 1.7.10 timings NPE) — a crashed server never wrote
+      # probe-results.txt, so its absence is a hard fail. Also scan the log for a
+      # fatal-crash signature. Runs regardless of the gradle exit code so it catches
+      # the exit-0-but-crashed case.
       - name: Assert probe ran and passed (false-green backstop)
         if: ${{ !cancelled() }}
         env:

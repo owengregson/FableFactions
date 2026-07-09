@@ -29,7 +29,7 @@ import dev.fablemc.factions.kernel.vocab.BankTxType;
 /**
  * MySQL projection parity, gated behind {@code FABLE_MYSQL_TEST=1} and default-skipped (work order
  * W2b §3). Supply a reachable database via {@code FABLE_MYSQL_URL} (JDBC URL),
- * {@code FABLE_MYSQL_USER}, {@code FABLE_MYSQL_PASS}. Mirrors the H2 smoke against the
+ * {@code FABLE_MYSQL_USER}, {@code FABLE_MYSQL_PASS}. Mirrors the embedded smoke against the
  * {@code ON DUPLICATE KEY UPDATE} dialect so replay idempotence holds on MySQL too.
  */
 @EnabledIfEnvironmentVariable(named = "FABLE_MYSQL_TEST", matches = "1")

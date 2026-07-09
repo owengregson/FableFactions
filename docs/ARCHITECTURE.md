@@ -23,7 +23,7 @@ one Multi-Release mega-jar spanning PaperSpigot 1.7.10 → Paper/Folia 26.1.2.
   publishes one snapshot per drained batch. The writer never calls a Bukkit API — enforced by
   the build (the reducer lives in `:kernel`, which cannot see Bukkit).
 * **Storage is a projection, never an authority.** Effects append to a CRC32C write-ahead
-  journal (group-commit fsync), then batch-project to H2/MySQL on the `fable-storage` thread
+  journal (group-commit fsync), then batch-project to HSQLDB/MySQL on the `fable-storage` thread
   with a `journal_seq` checkpoint. Boot = load DB + replay journal tail. No code path reads
   the database to make a game decision after boot.
 * **Version divergence resolves once at boot** into `Capabilities` + a typed `PlatformProfile`
@@ -126,18 +126,19 @@ loudly (`PluginManager.disablePlugin` via `runGlobal`) — a dead pipeline must 
 healthy. Queue rejection policy stays as C §3.5 (bounded player lane → `REJECTED_BUSY`;
 unbounded system lane).
 
-**AM-10 — Java-8-line storage stack, pinned** (graft from B; fixes the base-tier fatal).
-`HikariCP 4.0.3` (last Java-8 line), `H2 1.4.200` (Java-8 compatible; **NO `NON_KEYWORDS`
-URL flag** — that is H2 2.x-only), `mysql-connector-j 8.0.33`. H2 URL:
-`jdbc:h2:file:<path>;MODE=MySQL;DB_CLOSE_DELAY=-1`, pool=1, `MERGE INTO … KEY(id)` rewrite in
-`H2Dialect`; MySQL `ON DUPLICATE KEY UPDATE`, pool from config (default 10). All three shaded
+**AM-10 — embedded storage stack, current releases** (superseded pins: beta.3 modernized to
+DBCP2 + HSQLDB + mysql-connector-j 9.x; nothing is version-held for Java-8 anymore). Embedded
+backend = HSQLDB (official `jdk8` artifact, pure Java-8 bytecode, MySQL syntax mode). URL:
+`jdbc:hsqldb:file:<path>;sql.syntax_mys=true`, pool=1, user `SA`, explicit `SHUTDOWN` on close;
+the upsert is MySQL's `ON DUPLICATE KEY UPDATE` shape on BOTH backends (`HsqldbDialect`
+delegates to `MySqlDialect`); MySQL pool from config (default 10). All shaded
 + relocated under `dev.fablemc.factions.lib.*`; `META-INF/services/java.sql.Driver` excluded
 (explicit `driverClassName` on the relocated class); **`META-INF/versions/**` stripped from
 shaded third-party libs before the jvmdg step**; `verifyJdk8Api` (empty allowlist, real JDK-8
 rt.jar) runs over the final mega-jar INCLUDING these libs.
 
 **AM-11 — Single-instance advisory DB lock** (graft from B). At boot, before serving:
-MySQL `SELECT GET_LOCK('fablefactions:<db>', 5)`; H2 an `ff_meta` lock row with
+MySQL `SELECT GET_LOCK('fablefactions:<db>', 5)`; embedded (HSQLDB) an `ff_meta` lock row with
 heartbeat-and-fence (owner UUID + expiry, refreshed every 15s by `fable-storage`, takeover
 only after expiry). A second live instance pointed at the same database refuses to boot
 read-write with a loud error. Mandatory because memory is authoritative — dual writers would
@@ -211,7 +212,7 @@ the projector's ack (publish-after-ack applies to the *message*, not the state).
                TextPort, Scope, MenuModel. compileOnly paper 1.13.2. api(:kernel).
 :core          the plugin: boot, IntentBus/writer, EffectJournal, StorageProjector, dialects,
                listeners, command trees, GUI, chest/teleport/session engines, config parser,
-               MessageCatalog, integrations, bStats, update checker. impl: Hikari/H2/MySQL
+               MessageCatalog, integrations, bStats, update checker. impl: DBCP2/HSQLDB/MySQL
                drivers + adventure(+minimessage,+legacy) — all shaded+relocated.
 :compat-folia  FoliaScheduling only. compileOnly :platform + paper 1.20.4. FQN-loaded.
 :compat-modern ModernItemCodec (serializeAsBytes), BrigadierInstaller, AsyncChunkGet helper.
@@ -236,25 +237,31 @@ Proposal C §14 table adopted as the acceptance checklist.
 
 ## 5. Build pipeline (final)
 
-Mental recipe kept verbatim (`docs/research/mental-build.md` §12 checklist): Gradle 9.5.1,
-shadow 9.4.2 → jvmdg 1.3.6 `DowngradeJar` (`downgradeTo=1_8`, `multiReleaseOriginal=true`,
-NEVER `multiReleaseVersions`; classpath = union of core+compat compile classpaths) →
-`ShadeJar` (`shadePath="dev/fablemc/factions/lib/jvmdg/"`; probe plugin uses
-`dev/fablemc/factions/probe/lib/jvmdg/`) → canonical `FableFactions-<v>.jar`; gates
-`verifyDowngrade` (sentinel `dev/fablemc/factions/boot/FableFactionsPlugin` v52 base / v61
-versions-17), `verifyJdk8Api` (empty allowlist), `verifyRelocation` (net.kyori + hikari + h2
-+ mysql tokens), `verifyProbeIsolation`, plus AM-13's two floor gates and
-`verifyKernelPurity`; `failOnJvmdgWarnings` with the console-capture gotchas;
+Evolved from the Mental recipe (`docs/research/mental-build.md` is the historical record):
+Gradle 9.6.1, shadow 9.5.1 → three forked jvmdg-1.3.6 CLI legs off the shaded jar
+(`buildSrc` `fable.JvmdgLegTask`, `-c 52/57/61`, each `downgrade|shade` chained in a fresh
+short-lived JVM; shade prefix `dev/fablemc/factions/lib/jvmdg/`, probe plugin uses
+`dev/fablemc/factions/probe/lib/jvmdg/` on its own 52/61 legs) → `mergeTiers`
+(`fable.MergeMultiReleaseTask`: base = leg52, `versions/13` = leg57 byte-diff vs base,
+`versions/17` = leg61 byte-diff vs fall-through) → canonical `FableFactions-<v>.jar`.
+Forking is load-bearing: in-daemon jvmdg accumulates broken timed-wait state in long-lived
+daemons (instant `TimeoutException`). Gates: `verifyDowngrade` (tier caps 52/57/61, sentinel
+`dev/fablemc/factions/core/boot/FableFactionsPlugin` forked 52/57/61, per-tier jvmdg-runtime
+ref closure), `verifyJdk8Api` (empty allowlist), `verifyRelocation` (net.kyori + commons +
+hsqldb + mysql tokens), `verifyProbeIsolation`, plus AM-13's two floor gates and
+`verifyKernelPurity`; jvmdg warnings are per-leg build failures (task-scoped forked output);
 `support-matrix.json` extended to 1.7.10 (floor entry ladder-probed in CI; `floorApi: "1.13"`,
 `folia-supported: true`); plugin.yml `${version}`/`${apiVersion}` expansion; japicmp on `:api`
 deferred until api-1.0 baseline exists. Relocations: `net.kyori`, `org.bstats`,
-`com.zaxxer.hikari`, `org.h2`, `com.mysql` → `dev.fablemc.factions.lib.*`.
+`org.apache.commons.{dbcp2,pool2,logging}`, `org.hsqldb`, `com.mysql` →
+`dev.fablemc.factions.lib.*`. Adventure ships at 5.x (v65) — the `-c 61` leg normalizes it
+for Java 17-20 runtimes, so no dependency is version-held for Java-8 reach.
 
 ## 6. Testing gates (CI = `./gradlew build` + matrix)
 
 Kernel formula pins · reducer property tests (jqwik: relation symmetry, caps, escrow
 conservation, cache==recompute, page-bound AM-5) · replay determinism + crash-recovery ·
-H2/MySQL projection parity · ArchUnit suite + KernelClasspathTest + TextPort boundary +
+HSQLDB/MySQL projection parity · ArchUnit suite + KernelClasspathTest + TextPort boundary +
 AM-13 gates · Scheduling TCK both backends · jcstress publication harnesses (AM-8) · JMH
 pins (`Verdicts.decide` 0 B/op; atlas <100ns @5M; reducer ≥100k intents/s; publish p99 <5ms)
 · live matrix per support-matrix entry with bytecode-tier assertion + D-9 console-swallow

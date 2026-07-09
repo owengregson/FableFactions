@@ -7,9 +7,8 @@
 # auto-merge → GitHub squash-merges ONLY after the required "Build + verification
 # gates" check passes and the branch-protection review requirement is satisfied
 # (this approval provides it). Major bumps are never auto-merged — they wait for a
-# human — and the spec-pinned lines (AM-10 storage stack, jqwik/junit coupling,
-# adventure major, paper API floors) are ignored in dependabot.yml so they never
-# reach here at all.
+# human — and the deliberately pinned lines (jvmdowngrader, junit/jqwik majors,
+# paper API floors) are ignored in dependabot.yml so they never reach here at all.
 #
 # pull_request_target is required so the token has write access to approve/merge;
 # it is hard-scoped to actor == dependabot[bot], and only Dependabot's own metadata
@@ -56,4 +55,4 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment "$PR_URL" --body "Major update for ${{ steps.meta.outputs.dependency-names }} — NOT auto-merged. A maintainer must review it against the Java-8 base-tier / API-floor constraints (docs/design/per-version-dependencies.md, AM-10)."
+          gh pr comment "$PR_URL" --body "Major update for ${{ steps.meta.outputs.dependency-names }} — NOT auto-merged. A maintainer must review it against the downgrade-pipeline / API-floor constraints (.github/dependabot.yml, docs/ARCHITECTURE.md §5)."

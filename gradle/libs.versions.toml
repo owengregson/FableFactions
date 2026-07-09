@@ -1,59 +1,34 @@
 [versions]
-# paper-api compile-API artifacts, NOT support-matrix members: the three API levels
-# the modules compile AGAINST (floor / Folia symbols / modern symbols), chosen for
-# the symbols each needs — never the runtime versions the plugin is TESTED on. The
-# tested Minecraft versions live only in support-matrix.json.
-#
-# NOTE the floor's OLD groupId: com.destroystokyo.paper published paper-api through
-# 1.16.5; io.papermc.paper starts only at 1.17. Compiling core against the 1.13 API
-# (version-deltas §3.17) shrinks the 1.13–1.16 probe band to ~zero.
+# paper-api compile-API levels the modules compile AGAINST (floor / Folia symbols /
+# modern symbols) — never the runtime versions tested; those live in support-matrix.json.
+# The floor keeps the OLD groupId: com.destroystokyo.paper published paper-api through 1.16.5.
 paper-floor = "1.13.2-R0.1-SNAPSHOT"
 paper-folia = "1.20.4-R0.1-SNAPSHOT"
 paper-modern = "1.20.6-R0.1-SNAPSHOT"
 
-# Shaded + relocated into the FableFactions jar (dev.fablemc.factions.lib.adventure) so a
-# self-contained Adventure — the legacy-string serializer especially — is present below Paper
-# 1.16.5 where net.kyori is absent from the server. Held at the latest 4.x (Java-8-native, base
-# tier). Adventure 5.x IS consumable via build-high (jvm.version=21 → downgrade), and the API
-# needs no .java change — but 5.x pulls in far more modern-JDK APIs, and jvmdg's shim-stub set for
-# them composes non-deterministically with the versions/13 + versions/21 tiers (green locally, but
-# verifyJdk8Api flagged missing base-tree stubs in CI). Deferred until the multi-tier stub merge is
-# made deterministic; the other deps modernized without it.
-adventure = "4.26.1"
-
-# Storage stack, shaded + relocated under dev.fablemc.factions.lib.*. The connection pool is
-# Apache Commons DBCP2 (with commons-pool2): its LATEST releases still target Java 8, so they
-# drop straight into the v52 base tier with no jvmdg downgrade — unlike HikariCP, whose 5.x+
-# line needs Java 11 + unshimmable JDBC-4.3 methods. DBCP2 logs via commons-logging, so this
-# also removed the slf4j pin. mysql-connector-j 9.x is consumed as-is (its Java-9+ bytecode is
-# jvmdg-downgraded; the optional OpenTelemetry handler is <clinit>-guarded). H2 1.4.200 stays
-# on the Java-8 line (2.x changes the on-disk format + SQL dialect — a data migration, deferred).
+# Shaded + relocated (dev.fablemc.factions.lib.*). Adventure 5.x is Java-21 (v65)
+# bytecode; the jvmdg legs normalize it per tier (v52 base / v57 / v61), so no version
+# pin is needed for Java-8 reach. HSQLDB is consumed via its official jdk8 classifier
+# (pure Java-8 bytecode in the current release, no natives). DBCP2/pool2 are Java-8-native.
+adventure = "5.2.0"
 commons-dbcp2 = "2.14.0"
 commons-pool2 = "2.13.1"
-# H2 2.2.224 is the last Java-8-native H2 line (2.3.x moved to a Java-11 floor); like DBCP2 it
-# drops into the v52 base tier with no jvmdg downgrade. Our schema + MODE=MySQL survives 2.x's
-# stricter reserved-word set as-is (the full-DDL storage tests pass without NON_KEYWORDS). (Beta:
-# no on-disk migration from the old 1.4.200 format — a fresh DB is created, per the project owner.)
-h2 = "2.2.224"
+hsqldb = "2.7.4"
 mysql = "9.7.0"
 
 bstats = "3.2.1"
-# compileOnly ONLY (soft-dep, never shaded): the typed FableExpansion subclass needs the
-# abstract PlaceholderExpansion supertype at compile time; the class is FQN-loaded at
-# runtime behind the PlaceholderAPI presence gate (me/clip is a verifyJdk8Api server ignore).
+# compileOnly soft-dep only, never shaded: the typed FableExpansion supertype.
 placeholderapi = "2.12.3"
 annotations = "26.1.0"
 junit = "5.14.4"
-jqwik = "1.9.2"
+jqwik = "1.10.1"
 archunit = "1.4.2"
 asm = "9.10.1"
 
 shadow = "9.5.1"
 run-paper = "3.0.2"
-# JVMDowngrader — lowers the shaded Java-17 (v61) jar to a Multi-Release mega-jar
-# whose base tree is class v52 (Java 8) with the original v61 kept under
-# META-INF/versions/17, so the one artifact classloads from Java 8 up. THE
-# load-bearing tool version; the behavior below is 1.3.6-specific.
+# JVMDowngrader CLI — forked per leg to produce the Multi-Release mega jar
+# (v52 base / v57 versions-13 / v61 versions-17). See buildSrc JvmdgLegTask.
 jvmdowngrader = "1.3.6"
 
 [libraries]
@@ -65,11 +40,9 @@ adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" 
 adventure-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
 adventure-serializer-legacy = { module = "net.kyori:adventure-text-serializer-legacy", version.ref = "adventure" }
 
-# Apache Commons DBCP2 connection pool + its commons-pool2 backend; both pull commons-logging
-# transitively (all Java-8-native, so no jvmdg shim and no slf4j binding to bundle).
 commons-dbcp2 = { module = "org.apache.commons:commons-dbcp2", version.ref = "commons-dbcp2" }
 commons-pool2 = { module = "org.apache.commons:commons-pool2", version.ref = "commons-pool2" }
-h2 = { module = "com.h2database:h2", version.ref = "h2" }
+hsqldb = { module = "org.hsqldb:hsqldb", version.ref = "hsqldb" }
 mysql = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 placeholderapi = { module = "me.clip:placeholderapi", version.ref = "placeholderapi" }
@@ -82,10 +55,11 @@ junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 archunit = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 
-# ASM for the JDK-8 gate tool and the in-process AM-13 descriptor-floor gates.
+# ASM for the JDK-8 gate tool and the in-process AM-13 floor gates (buildSrc).
 asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+
+jvmdg-cli = { module = "xyz.wagyourtail.jvmdowngrader:jvmdowngrader", version.ref = "jvmdowngrader" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 run-paper = { id = "xyz.jpenilla.run-paper", version.ref = "run-paper" }
-jvmdowngrader = { id = "xyz.wagyourtail.jvmdowngrader", version.ref = "jvmdowngrader" }

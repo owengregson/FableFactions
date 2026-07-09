@@ -18,9 +18,9 @@ architectural rules that the build enforces. Small, focused PRs merge fastest.
 - [ ] Docs updated where the change affects them (`docs/ARCHITECTURE.md` /
       `docs/CONTRACTS.md` are normative — a change that contradicts them needs the doc
       changed in the same PR, with justification).
-- [ ] **No new dependencies**, and no version bumps to the pinned storage stack
-      (HikariCP 4.0.3 / H2 1.4.200 / mysql 8.0.33 — AM-10). New deps require prior
-      discussion.
+- [ ] **No new dependencies** without prior discussion, and no bumps to the deliberate
+      pins (jvmdowngrader 1.3.6, paper-api compile levels — see `.github/dependabot.yml`).
+      Every shaded dependency needs a relocation rule and a green `verifyJdk8Api`.
 - [ ] Commit messages follow conventional commits (`feat:` / `fix:` / `refactor:` /
       `style:` / `docs:` / `test:` / `build:`).
 

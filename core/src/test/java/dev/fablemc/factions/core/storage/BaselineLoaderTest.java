@@ -13,7 +13,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
 
-import org.h2.jdbcx.JdbcDataSource;
+import org.hsqldb.jdbc.JDBCDataSource;
 import org.junit.jupiter.api.Test;
 
 import dev.fablemc.factions.core.storage.load.BaselineLoader;
@@ -39,9 +39,11 @@ final class BaselineLoaderTest {
         return l;
     }
 
-    private static DataSource h2(String mem) {
-        JdbcDataSource ds = new JdbcDataSource();
-        ds.setURL("jdbc:h2:mem:" + mem + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+    private static DataSource embedded(String mem) {
+        JDBCDataSource ds = new JDBCDataSource();
+        ds.setUrl(HsqldbDialect.memUrl(mem));
+        ds.setUser("SA");
+        ds.setPassword("");
         return ds;
     }
 
@@ -49,7 +51,7 @@ final class BaselineLoaderTest {
 
     @Test
     void loadsFactionsMembersAndClaims() throws SQLException {
-        DataSource ds = h2("base_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("base_" + UUID.randomUUID().toString().replace('-', '_'));
         UUID factionId = new UUID(11, 22);
         UUID owner = new UUID(33, 44);
         UUID member = new UUID(55, 66);

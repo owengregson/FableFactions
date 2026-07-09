@@ -64,7 +64,7 @@ import dev.fablemc.factions.platform.sched.Scheduling;
  * timers/integrations on top through the exposed {@link #bus}/{@link #snapshots}/{@link #fanout}.
  *
  * <p>Because it depends on no {@code JavaPlugin}, the whole graph is constructible with an in-memory
- * H2 and a fake {@link Scheduling} for the headless boot-order test (work order acceptance): it
+ * HSQLDB and a fake {@link Scheduling} for the headless boot-order test (work order acceptance): it
  * asserts snapshot v0 is published, that the writer takes one {@code CreateFaction} intent end to end
  * (reduced → journaled → projected row), and that the ordered shutdown flushes the projection.
  *
@@ -75,7 +75,7 @@ import dev.fablemc.factions.platform.sched.Scheduling;
  */
 public final class BootAssembly {
 
-    /** The H2 advisory-lock fence TTL, heartbeat-refreshed on the storage cadence (AM-11). */
+    /** The embedded advisory-lock fence TTL, heartbeat-refreshed on the storage cadence (AM-11). */
     public static final long LOCK_TTL_MILLIS = 60_000L;
 
     private static final String JOURNAL_SUBPATH = "data/journal";
@@ -83,10 +83,10 @@ public final class BootAssembly {
     /**
      * The injected boot dependencies — everything the Bukkit-free core needs, none of it a
      * {@code JavaPlugin}. The plugin adapter fills these from the server; the headless test fills
-     * them from an in-memory H2 + a fake scheduler.
+     * them from an in-memory HSQLDB + a fake scheduler.
      *
      * @param log          the boot logger
-     * @param dataFolder   the plugin data folder (config files, H2 file DB, journal segments)
+     * @param dataFolder   the plugin data folder (config files, embedded file DB, journal segments)
      * @param resourceOpener opens a bundled resource by name (config/message defaults); {@code null} → absent
      * @param clock        the wall clock captured into every intent envelope + used for lock fence
      * @param tick         the monotonic server-tick supplier captured into envelopes
@@ -99,8 +99,8 @@ public final class BootAssembly {
      * @param feedbackOverride a {@link FeedbackRouter} to use instead of the real {@link EffectFeedback}
      *                     (the headless test injects {@link FeedbackRouter#NOOP}; production passes {@code null})
      * @param storageOverride a {@link StorageConfigView} that supersedes {@code config.storage()}
-     *                     (the test injects an {@code mem:} H2; production passes {@code null})
-     * @param mysqlPassword the MySQL wallet password (kept out of the kernel image; empty for H2)
+     *                     (the test injects an {@code mem:} HSQLDB; production passes {@code null})
+     * @param mysqlPassword the MySQL wallet password (kept out of the kernel image; empty for HSQLDB)
      * @param configBaker  the AM-14 finalizer that bakes the container/interact material bitsets +
      *                     world multipliers from the runtime {@code Material} registry (finding #7);
      *                     {@code null} → identity (the headless test, which has no protection surface)
@@ -308,7 +308,7 @@ public final class BootAssembly {
                     }
                 }
                 try {
-                    storage.close();   // release the advisory lock + close the Hikari pool (finding #17)
+                    storage.close();   // release the advisory lock + close the connection pool (finding #17)
                 } catch (RuntimeException ignore) {
                     // best effort
                 }

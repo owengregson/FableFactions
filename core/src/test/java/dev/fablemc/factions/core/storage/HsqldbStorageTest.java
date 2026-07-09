@@ -15,7 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.sql.DataSource;
 
-import org.h2.jdbcx.JdbcDataSource;
+import org.hsqldb.jdbc.JDBCDataSource;
 import org.junit.jupiter.api.Test;
 
 import dev.fablemc.factions.kernel.effect.ClaimEffect;
@@ -28,16 +28,18 @@ import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.vocab.BankTxType;
 
 /**
- * The H2 (in-memory) storage contract (work order W2b §3): schema creation + migrator idempotence,
+ * The embedded HSQLDB (in-memory) storage contract (work order W2b §3): schema creation + migrator idempotence,
  * a projector smoke run (synthetic effect batch → rows + advanced checkpoint + CRITICAL ack), and
- * the AM-11 advisory lock refusing a second live instance. Uses a named in-memory DB with
- * {@code DB_CLOSE_DELAY=-1} so multiple connections/DataSources share one database (AM-10).
+ * the AM-11 advisory lock refusing a second live instance. Uses a named in-memory DB, which
+ * HSQLDB shares by name within the process, so multiple DataSources see one database (AM-10).
  */
-final class H2StorageTest {
+final class HsqldbStorageTest {
 
-    private static DataSource h2(String memName) {
-        JdbcDataSource ds = new JdbcDataSource();
-        ds.setURL("jdbc:h2:mem:" + memName + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+    private static DataSource embedded(String memName) {
+        JDBCDataSource ds = new JDBCDataSource();
+        ds.setUrl(HsqldbDialect.memUrl(memName));
+        ds.setUser("SA");
+        ds.setPassword("");
         return ds;
     }
 
@@ -51,7 +53,7 @@ final class H2StorageTest {
 
     @Test
     void schemaCreatesAndMigratorIsIdempotent() throws SQLException {
-        DataSource ds = h2("mig_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("mig_" + UUID.randomUUID().toString().replace('-', '_'));
         try (Connection c = ds.getConnection()) {
             assertEquals(SchemaMigrator.CURRENT_VERSION, SchemaMigrator.migrate(c));
             assertEquals(SchemaMigrator.CURRENT_VERSION, SchemaMigrator.schemaVersion(c));
@@ -76,13 +78,13 @@ final class H2StorageTest {
 
     @Test
     void projectorSmokeWritesRowsAdvancesCheckpointAndAcks() throws SQLException {
-        DataSource ds = h2("proj_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("proj_" + UUID.randomUUID().toString().replace('-', '_'));
         try (Connection c = ds.getConnection()) {
             SchemaMigrator.migrate(c);
         }
 
         AtomicLong ackedSeq = new AtomicLong(Long.MIN_VALUE);
-        StorageProjector projector = new StorageProjector(ds, H2Dialect.INSTANCE,
+        StorageProjector projector = new StorageProjector(ds, HsqldbDialect.INSTANCE,
                 worldIdx -> worldIdx == 0 ? "world" : null, () -> 1_000L,
                 committedSeq -> ackedSeq.set(committedSeq), java.util.logging.Logger.getAnonymousLogger());
 
@@ -129,8 +131,8 @@ final class H2StorageTest {
     @Test
     void advisoryLockRefusesSecondLiveInstance() throws SQLException {
         String mem = "adv_" + UUID.randomUUID().toString().replace('-', '_');
-        DataSource ds1 = h2(mem);
-        DataSource ds2 = h2(mem);   // a second DataSource pointed at the SAME database
+        DataSource ds1 = embedded(mem);
+        DataSource ds2 = embedded(mem);   // a second DataSource pointed at the SAME database
         try (Connection c = ds1.getConnection()) {
             SchemaMigrator.migrate(c);
         }
@@ -138,20 +140,20 @@ final class H2StorageTest {
         UUID owner1 = new UUID(1, 1);
         UUID owner2 = new UUID(2, 2);
 
-        AdvisoryLock lock1 = AdvisoryLock.tryAcquire(ds1, H2Dialect.INSTANCE, mem, owner1, 60_000L,
+        AdvisoryLock lock1 = AdvisoryLock.tryAcquire(ds1, HsqldbDialect.INSTANCE, mem, owner1, 60_000L,
                 () -> now);
         assertNotNull(lock1, "first instance acquires the lock");
         assertTrue(lock1.ownsLock());
 
         // While the first lock is live (heartbeat keeps the fence fresh), a second instance refuses.
         lock1.heartbeat();
-        AdvisoryLock lock2 = AdvisoryLock.tryAcquire(ds2, H2Dialect.INSTANCE, mem, owner2, 60_000L,
+        AdvisoryLock lock2 = AdvisoryLock.tryAcquire(ds2, HsqldbDialect.INSTANCE, mem, owner2, 60_000L,
                 () -> now);
         assertNull(lock2, "a second live instance must be refused read-write");
 
         // After the owner releases, the lock is grantable again.
         lock1.close();
-        AdvisoryLock lock3 = AdvisoryLock.tryAcquire(ds2, H2Dialect.INSTANCE, mem, owner2, 60_000L,
+        AdvisoryLock lock3 = AdvisoryLock.tryAcquire(ds2, HsqldbDialect.INSTANCE, mem, owner2, 60_000L,
                 () -> now);
         assertNotNull(lock3, "the released lock can be re-acquired");
         lock3.close();
@@ -160,8 +162,8 @@ final class H2StorageTest {
     @Test
     void advisoryLockHeartbeatDetectsTakeoverAndFiresFenceLost() throws SQLException {
         String mem = "fence_" + UUID.randomUUID().toString().replace('-', '_');
-        DataSource ds1 = h2(mem);
-        DataSource ds2 = h2(mem);
+        DataSource ds1 = embedded(mem);
+        DataSource ds2 = embedded(mem);
         try (Connection c = ds1.getConnection()) {
             SchemaMigrator.migrate(c);
         }
@@ -169,13 +171,13 @@ final class H2StorageTest {
         java.util.concurrent.atomic.AtomicBoolean fenceLost = new java.util.concurrent.atomic.AtomicBoolean();
 
         // owner1 acquires a 5s fence; owner1 is told to flag if it loses the fence (finding #4).
-        AdvisoryLock lock1 = AdvisoryLock.tryAcquire(ds1, H2Dialect.INSTANCE, mem, new UUID(1, 1),
+        AdvisoryLock lock1 = AdvisoryLock.tryAcquire(ds1, HsqldbDialect.INSTANCE, mem, new UUID(1, 1),
                 5_000L, now::get, () -> fenceLost.set(true));
         assertNotNull(lock1, "owner1 acquires the fence");
 
         // Time passes beyond owner1's expiry; owner2 legitimately takes over the stale lock.
         now.addAndGet(10_000L);
-        AdvisoryLock lock2 = AdvisoryLock.tryAcquire(ds2, H2Dialect.INSTANCE, mem, new UUID(2, 2),
+        AdvisoryLock lock2 = AdvisoryLock.tryAcquire(ds2, HsqldbDialect.INSTANCE, mem, new UUID(2, 2),
                 60_000L, now::get, AdvisoryLock.IGNORE_FENCE_LOSS);
         assertNotNull(lock2, "owner2 takes over after owner1's fence expired");
 
@@ -187,14 +189,54 @@ final class H2StorageTest {
     }
 
     @Test
+    void pagedQueriesBindLimitOffsetOnHsqldb() throws SQLException {
+        DataSource ds = embedded("page_" + UUID.randomUUID().toString().replace('-', '_'));
+        try (Connection c = ds.getConnection()) {
+            SchemaMigrator.migrate(c);
+        }
+        String fid = UUID.randomUUID().toString();
+        try (Connection c = ds.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO `audit_logs` (`id`,`faction_id`,`actor_uuid`,`action`,`detail`,`created_at`) "
+                             + "VALUES (?,?,?,?,?,?)")) {
+            for (int i = 0; i < 5; i++) {
+                ps.setString(1, UUID.randomUUID().toString());
+                ps.setString(2, fid);
+                ps.setString(3, null);
+                ps.setString(4, "act" + i);
+                ps.setString(5, "d" + i);
+                ps.setLong(6, i);
+                ps.executeUpdate();
+            }
+        }
+        // The exact paged shape StorageBoot.queryAudit/queryPowerHistory use: HSQLDB must
+        // accept BOUND `LIMIT ? OFFSET ?` parameters in MySQL syntax mode.
+        try (Connection c = ds.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "SELECT `created_at`,`actor_uuid`,`action`,`detail` FROM `audit_logs` "
+                             + "WHERE `faction_id`=? ORDER BY `created_at` DESC LIMIT ? OFFSET ?")) {
+            ps.setString(1, fid);
+            ps.setInt(2, 2);
+            ps.setInt(3, 1);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                assertEquals(3L, rs.getLong(1), "DESC order, offset 1 starts at created_at=3");
+                assertTrue(rs.next());
+                assertEquals(2L, rs.getLong(1));
+                org.junit.jupiter.api.Assertions.assertFalse(rs.next(), "limit 2 caps the page");
+            }
+        }
+    }
+
+    @Test
     void blobStoreRoundTripsFramedBytes() throws SQLException {
-        DataSource ds = h2("blob_" + UUID.randomUUID().toString().replace('-', '_'));
+        DataSource ds = embedded("blob_" + UUID.randomUUID().toString().replace('-', '_'));
         try (Connection c = ds.getConnection()) {
             SchemaMigrator.migrate(c);
         }
         byte[] payload = {1, 2, 3, 4, 5};
         byte[] framed = Blobs.wrap(Blobs.FORMAT_MODERN, 3120, payload);
-        Blobs.store(ds, H2Dialect.INSTANCE, 77L, framed, 1_000L);
+        Blobs.store(ds, HsqldbDialect.INSTANCE, 77L, framed, 1_000L);
 
         Blobs.Blob read = Blobs.read(ds, 77L);
         assertNotNull(read);

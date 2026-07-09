@@ -14,7 +14,7 @@ cd FableFactions
 ./gradlew build
 ```
 
-That is the whole setup. The build uses Gradle 9.5.1 (wrapper included) with JDK
+That is the whole setup. The build uses Gradle 9.6.1 (wrapper included) with JDK
 toolchains auto-provisioned via the foojay resolver — the build JDK (25) and the JDK 8
 used by the `verifyJdk8Api` gate are downloaded automatically if not already installed.
 You only need **any JDK 17+ on your PATH to launch Gradle itself**; no other manual JDK
@@ -25,12 +25,10 @@ install is required.
 suite (see [Verification gates](#verification-gates)).
 
 Note: the build runs with the parallel executor, the build cache, and the configuration
-cache enabled (`gradle.properties`). The jvmdg warning-capture listens on Gradle's
-*global* console stream, so every jvmdg task is serialized behind a shared
-`jvmdgConsoleLock` build service and fenced after the test/test-compile tasks — if you
-add a task that writes warnings to the console while jars are being downgraded, add it
-to the fence list in `core/build.gradle.kts`/`probe/build.gradle.kts` rather than
-turning the parallel executor off.
+cache enabled (`gradle.properties`). Each JVMDowngrader leg forks the jvmdg CLI in its
+own short-lived JVM (`buildSrc` `JvmdgLegTask`), so its output is task-scoped, the legs
+run in parallel, and jvmdg warnings are per-task build failures — no console locks or
+task fences are needed.
 
 ### IDE
 
@@ -130,8 +128,8 @@ jar(s) or compiled classes; descriptions match `core/build.gradle.kts`.
 |---|---|---|
 | `verifyKernelPurity` | No `dev/fablemc/factions/kernel/` class in the mega jar references `org/bukkit` — the bytecode backstop for the kernel firewall. | You leaked a Bukkit type into `:kernel`. Move the code to `:platform`/`:core`, or pass the data through the Intent/Effect vocabulary. |
 | `verifyJdk8Api` | Every reference in both mega jars' base (v52) tree resolves against a real JDK-8 `rt.jar`, in-jar, or a server-provided package. Empty allowlist. | You used a post-Java-8 stdlib API (or added a dependency that does). Replace with a Java-8-era equivalent. |
-| `verifyDowngrade` | The Multi-Release tier shape: base ≤ v52, `versions/17` first-party classes are v61 and a subset of base, the boot sentinel is forked 52/61, and no first-party base class reflectively introspects records. | The downgrade pipeline produced a malformed jar — usually reflective record introspection (`Class.isRecord` / `RecordComponent`) or a language feature jvmdg couldn't lower cleanly. |
-| `verifyRelocation` | No un-relocated `net/kyori`, `com/zaxxer`, `org/h2`, `com/mysql`, or `org/slf4j` token survives outside `dev/fablemc/factions/lib/`. | You referenced a third-party class in a way that escaped relocation, or added a shaded dependency without a relocation rule. |
+| `verifyDowngrade` | The Multi-Release tier shape: base ≤ v52, `versions/13` ≤ v57, `versions/17` ≤ v61, the boot sentinel forked 52/57/61, relocated jvmdg-runtime references resolving in every tier's effective class set, and no first-party base class reflectively introspecting records. | The downgrade pipeline produced a malformed jar — usually reflective record introspection (`Class.isRecord` / `RecordComponent`) or a language feature jvmdg couldn't lower cleanly. |
+| `verifyRelocation` | No un-relocated `net/kyori`, `org/apache/commons/{dbcp2,pool2,logging}`, `org/hsqldb`, or `com/mysql` token survives outside `dev/fablemc/factions/lib/`. | You referenced a third-party class in a way that escaped relocation, or added a shaded dependency without a relocation rule. |
 | `verifyProbeIsolation` | The probe jar carries no FableFactions jvmdg runtime prefix, and neither jar references an un-relocated jvmdg stub type in a descriptor (which would hang a live v52 server, not fail the build). | The jvmdg shading contract was broken — almost always a build-script change; revert it or get a work order. |
 | `verifyDescriptorFloor` | No baseline (non-`@ProbeGated`) `Listener` mentions a post-1.7.10 Bukkit type in any method/field descriptor (AM-13). | Your listener would be silently swallowed at registration on old servers. Move the post-floor-typed handler into its own `@ProbeGated` listener registered behind a capability. |
 | `verifyNoStickyGetstatic` | No `GETSTATIC` of a Bukkit enum constant absent at the 1.7.10 floor (AM-13; sticky `NoSuchFieldError`). | Resolve the constant once at boot via the `Constants` resolver / `Enum.valueOf`, never as a direct field reference. |
@@ -165,10 +163,11 @@ Expectations:
 ## Dependency policy
 
 - All dependencies are pinned in `gradle/libs.versions.toml` (the version catalog).
-- The storage stack is **Java-8-line pinned and must never be bumped** (AM-10):
-  HikariCP `4.0.3` (last Java-8 line), H2 `1.4.200`, mysql-connector-j `8.0.33`.
-  Newer lines require Java 11+ and would break the base tier. A PR bumping any of these
-  will be closed.
+- **Nothing is version-held for Java-8 compatibility.** The jvmdg legs normalize dependency
+  bytecode per Multi-Release tier (Adventure 5.x ships as-is), and the embedded database is
+  HSQLDB's official `jdk8` artifact — pure Java-8 bytecode in its current release. The
+  deliberate pins are the jvmdowngrader CLI (1.3.6, load-bearing) and the paper-api compile
+  levels; see `.github/dependabot.yml` for the authoritative list.
 - **No new dependencies without prior discussion** (open an issue or Discussion first).
   Every shaded dependency needs a relocation rule and must pass `verifyJdk8Api` with the
   allowlist still empty — that bar is high on purpose.

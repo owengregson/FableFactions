@@ -22,7 +22,7 @@ import java.util.logging.Logger;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import org.h2.jdbcx.JdbcDataSource;
+import org.hsqldb.jdbc.JDBCDataSource;
 import org.junit.jupiter.api.Test;
 
 import dev.fablemc.factions.core.pipeline.FailureHandler;
@@ -36,7 +36,7 @@ import dev.fablemc.factions.platform.sched.TaskHandle;
 
 /**
  * The headless boot-order smoke: {@link BootAssembly} constructs the whole write plane over an
- * in-memory H2 and a fake {@link Scheduling} (no Bukkit server), then it is asserted that
+ * in-memory HSQLDB and a fake {@link Scheduling} (no Bukkit server), then it is asserted that
  *
  * <ul>
  *   <li>snapshot v0 is published (and reported, B10);</li>
@@ -65,12 +65,14 @@ final class BootAssemblyTest {
         String mem = "boot_" + UUID.randomUUID().toString().replace('-', '_');
 
         // A keep-alive connection pins the in-memory DB for the whole test so the test's own queries
-        // see the same database the boot pool + projector wrote (DB_CLOSE_DELAY=-1, AM-10).
-        JdbcDataSource probe = new JdbcDataSource();
-        probe.setURL("jdbc:h2:mem:" + mem + ";MODE=MySQL;DB_CLOSE_DELAY=-1");
+        // see the same database the boot pool + projector wrote (named mem DB, AM-10).
+        JDBCDataSource probe = new JDBCDataSource();
+        probe.setUrl("jdbc:hsqldb:mem:" + mem + ";sql.syntax_mys=true");
+        probe.setUser("SA");
+        probe.setPassword("");
         try (Connection pin = probe.getConnection()) {
             StorageConfigView memView = new StorageConfigView(
-                    "h2", "mem:" + mem, "localhost", 3306, "factions", "root", 1, false);
+                    "hsqldb", "mem:" + mem, "localhost", 3306, "factions", "root", 1, false);
             List<String> report = new ArrayList<>();
             Function<String, InputStream> resources = name -> BootAssemblyTest.class.getResourceAsStream("/" + name);
 

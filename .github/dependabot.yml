@@ -1,13 +1,10 @@
 # Dependabot configuration.
 #
-# CRITICAL — the Java-8-line storage stack is spec-pinned (docs/ARCHITECTURE.md
-# AM-10) and MUST NOT be bumped: HikariCP 4.0.3, H2 1.4.200, and
-# mysql-connector-j 8.0.33 are the last lines whose bytecode loads on the
-# Java 8 base tier of the mega-jar. Any newer major/minor/patch line raises
-# the class-file floor and breaks 1.7.10–1.16.5 hosts. Likewise the
-# xyz.wagyourtail.jvmdowngrader plugin is load-bearing pinned at 1.3.6 (the
-# downgrade + warning-capture behavior is verified against that exact version
-# by the verifyDowngrade gate). Dependabot must never propose updates to these.
+# The shaded stack tracks current upstream releases; the downgrade legs normalize
+# bytecode per Multi-Release tier and the verifyJdk8Api gate is the arbiter, so no
+# dependency is held back for Java-8 compatibility. The remaining ignores are
+# normative pins (compile API levels, the load-bearing downgrader version), not
+# compatibility holds.
 
 version: 2
 
@@ -20,31 +17,15 @@ updates:
     commit-message:
       prefix: build
     ignore:
-      # AM-10 pinned storage stack — ignore ALL update types.
-      - dependency-name: 'com.zaxxer:HikariCP'
-      - dependency-name: 'com.h2database:h2'
-      - dependency-name: 'com.mysql:mysql-connector-j'
-      # Load-bearing pinned downgrader plugin (1.3.6) — covers the plugin id
-      # and its Gradle plugin-marker artifact.
+      # Load-bearing pinned downgrader CLI (1.3.6) — verifyDowngrade and the leg
+      # pipeline are calibrated to it; bump deliberately with a full matrix run.
       - dependency-name: 'xyz.wagyourtail.jvmdowngrader*'
-      # Adventure (net.kyori) — the 4.x line is the last that runs on the Java-8
-      # base tier of the mega-jar; 4.x → 5.x drops Java 8 support (AM-1/AM-10).
-      # Allow 4.x minor/patch (the verifyJdk8Api gate catches any regression),
-      # block the semver-major jump only.
-      - dependency-name: 'net.kyori:*'
-        update-types: ['version-update:semver-major']
-      # slf4j-nop is pinned to the 1.7.x line that the relocated HikariCP 4.0.3
-      # no-op binder expects; slf4j 2.x changes the binding mechanism (ServiceLoader
-      # provider) and breaks the shaded no-op binder. Ignore ALL update types.
-      - dependency-name: 'org.slf4j:slf4j-nop'
-      # JUnit 6 == JUnit Platform 2.x, incompatible with the pinned jqwik 1.9.2
-      # (targets Platform 1.x). Allow 5.x minor/patch, block the semver-major jump.
+      # JUnit 6 (Platform 6.x) is a deliberate migration, not an auto-bump; jqwik
+      # tracks Platform 1.x and moves in lockstep with junit-bom.
       - dependency-name: 'org.junit:junit-bom'
         update-types: ['version-update:semver-major']
-      # jqwik 1.9.2 is spec-pinned and targets JUnit Platform 1.x; it moves in
-      # lockstep with junit-bom (above). A float to 1.10.x pulls a newer platform
-      # and breaks the coupling — ignore ALL update types.
       - dependency-name: 'net.jqwik:jqwik'
+        update-types: ['version-update:semver-major']
       # The Bukkit-facing COMPILE FLOOR is normatively 1.13.2 (ARCHITECTURE §3);
       # the whole 1.7.10-1.16.5 band is runtime-probed against it. Bumping the
       # floor artifact raises the compiled API surface (e.g. the 1.16 API adds

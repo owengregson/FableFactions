@@ -27,7 +27,9 @@ NORMATIVE.** A change that contradicts them must change the doc in the same PR.
 5. **Java-8-stdlib-only despite Java-17 source.** Language 17 (records/sealed/switch patterns
    OK) but the jar is jvmdg-downgraded to Java 8: no Java 18+ APIs, stick to long-stable
    `java.util` / `java.util.concurrent` / `java.nio`. `verifyJdk8Api` fails exotic stdlib usage.
-6. **Pinned deps must not move** (AM-10): HikariCP 4.0.3, H2 1.4.200, mysql 8.0.33, adventure 4.x,
-   slf4j-nop 1.7.x, junit 5.x, jvmdowngrader 1.3.6. All `net.kyori`/storage libs are relocated.
+6. **Deliberate pins must not move without a work order**: jvmdowngrader 1.3.6 (load-bearing)
+   and the paper-api compile levels (see `.github/dependabot.yml`). Everything else tracks
+   current releases (Adventure 5.x, HSQLDB jdk8, mysql 9.x, DBCP2). All `net.kyori`/storage
+   libs are relocated under `dev.fablemc.factions.lib.*`.
 
 Every class javadoc must state owning thread(s) and mutability class (immutable / confined / COW).

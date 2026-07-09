@@ -365,8 +365,8 @@ public final class ConfigParser {
 
     private static StorageConfigView parseStorage(ConfigurationSection db, List<String> issues) {
         return new StorageConfigView(
-                str(db, ConfigKeys.DB_TYPE, "h2", issues),
-                str(db, ConfigKeys.DB_H2_FILE, "data/factions", issues),
+                str(db, ConfigKeys.DB_TYPE, "hsqldb", issues),
+                str(db, ConfigKeys.DB_FILE, "data/factions", issues),
                 str(db, ConfigKeys.DB_MYSQL_HOST, "localhost", issues),
                 integer(db, ConfigKeys.DB_MYSQL_PORT, 3306, issues),
                 str(db, ConfigKeys.DB_MYSQL_DATABASE, "factions", issues),

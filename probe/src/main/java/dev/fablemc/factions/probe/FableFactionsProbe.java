@@ -39,6 +39,16 @@ public final class FableFactionsProbe extends JavaPlugin {
         report.flush();
         getLogger().info("FableFactionsProbe finished: allPassed=" + report.allPassed()
                 + " nonce=" + nonce + " tier=" + tier);
+        // Harness-driven runs set this so the lane terminates on its own once the
+        // results are on disk; a manually installed probe never stops the server.
+        if (Boolean.getBoolean("fablefactions.probe.shutdown")) {
+            getLogger().info("FableFactionsProbe requesting server shutdown (-Dfablefactions.probe.shutdown=true)");
+            try {
+                getServer().shutdown();
+            } catch (RuntimeException ex) {
+                getLogger().warning("server shutdown request failed: " + ex);
+            }
+        }
     }
 
     @Override

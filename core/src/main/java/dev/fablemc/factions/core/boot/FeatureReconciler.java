@@ -188,7 +188,7 @@ public final class FeatureReconciler {
         // loud AggregateDriftDetected effect — drift is a bug signal, never silent.
         s.task(assembly.scheduling().repeatAsync(Duration.ofMinutes(30), Duration.ofMinutes(30),
                 () -> bus.submitSystem(new SystemIntent.ReconcileSweep(0))));
-        // AM-11: refresh the H2 advisory-lock fence on the storage cadence.
+        // AM-11: refresh the embedded advisory-lock fence on the storage cadence.
         s.task(assembly.scheduling().repeatAsync(Duration.ofSeconds(15), Duration.ofSeconds(15),
                 assembly.storage()::heartbeat));
         report.line("timers", "power-tick + tax-sweep + advisory-lock heartbeat scheduled");

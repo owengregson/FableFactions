@@ -443,7 +443,7 @@ Covered in Risk #6. Summary decision table:
 | 1.20.6+ / 1.21.x / 26.1.2 / Folia 26.1.2 | Java 25-era | v61 |
 
 Build pipeline to copy verbatim from Mental: compile `options.release = 17` against
-the floor API → shadowJar → jvmdg DowngradeJar (v52 base + `multiReleaseOriginal`) →
+the floor API → shadowJar → jvmdg downgrade legs (historical: DowngradeJar + `multiReleaseOriginal`; the shipped pipeline evolved to forked CLI legs, see docs/ARCHITECTURE.md §5) →
 jvmdg ShadeJar (relocate jvmdg runtime under a plugin-unique prefix — the D-8
 cross-plugin stub-isolation rule: no post-Java-8 JDK type in any cross-plugin API
 descriptor) → gates `verifyJdk8Api` (empty allowlist vs real JDK-8 `rt.jar`),

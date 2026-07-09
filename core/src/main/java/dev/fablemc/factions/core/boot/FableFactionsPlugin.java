@@ -185,7 +185,7 @@ public final class FableFactionsPlugin extends JavaPlugin {
 
     /**
      * Reads the MySQL wallet password from {@code database.yml} (kept out of the kernel config image
-     * for hygiene). H2 — the default backend — ignores it. Extracts the default file if missing.
+     * for hygiene). HSQLDB — the default backend — ignores it. Extracts the default file if missing.
      */
     private String readMysqlPassword(File dataFolder) {
         File dbFile = new File(dataFolder, "database.yml");

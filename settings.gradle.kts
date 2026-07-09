@@ -6,8 +6,7 @@ pluginManagement {
 }
 
 plugins {
-    // Auto-provisions the per-module toolchains (build JDK 25, the JDK-8 gate runtime)
-    // from a real vendor download when a matching JDK is not already installed.
+    // Auto-provisions per-module toolchains (build JDK 25, the JDK-8 gate runtime).
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
