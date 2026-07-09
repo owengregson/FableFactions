@@ -50,8 +50,15 @@ permissions:
 jobs:
   matrix-prep:
     name: Select lanes from support-matrix.json
-    # Guard: never run the scheduled matrix on forks.
-    if: github.event_name != 'schedule' || github.repository == 'owengregson/FableFactions'
+    # Guards: never run the scheduled matrix on forks; never run the heavy live
+    # matrix for Dependabot PRs (a dependency bump is gated by ci.yml's build +
+    # verifyJdk8Api Java-8 gate + unit/property suites — booting 5 real servers per
+    # bump is wasted CI, and Dependabot's read-only token can't use the caches well).
+    # `lane` needs this job, so skipping here skips the whole workflow.
+    if: >-
+      (github.event_name != 'schedule' || github.repository == 'owengregson/FableFactions')
+      && github.actor != 'dependabot[bot]'
+      && github.event.pull_request.head.repo.fork != true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -74,7 +81,10 @@ jobs:
           else
             FILTER='.entries[] | select(.ci == "pr")'
           fi
-          MATRIX=$(jq -c "{include: [${FILTER} | {version, platform, jdk}]}" support-matrix.json)
+          # experimental defaults false; provisional legacy lanes (1.7.10/1.8.8 live boot,
+          # UNCERTAIN until measured — see support-matrix _comment) carry it so their known
+          # boot-uncertainty is visible but does not red this non-required workflow.
+          MATRIX=$(jq -c "{include: [${FILTER} | {version, platform, jdk, experimental: (.experimental // false)}]}" support-matrix.json)
           echo "Selected lanes: $MATRIX"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
@@ -83,6 +93,9 @@ jobs:
     needs: matrix-prep
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Provisional legacy live-boot lanes report but never red the workflow; modern
+    # lanes (experimental=false) fail honestly.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -122,6 +135,14 @@ jobs:
       # Task naming (core/build.gradle.kts): runIntegrationTest + ('Folia_' for
       # folia lanes, '_' otherwise) + version with dots as underscores,
       # e.g. runIntegrationTest_1_20_6, runIntegrationTestFolia_26_1_2.
+      # Clear any stale probe sentinel so the post-run assertion proves THIS boot ran
+      # the probe (a crashed server never rewrites it, so a leftover file can't lie).
+      - name: Clear stale probe results
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ matrix.version }}
+        run: rm -f "run/${PLATFORM}/${VERSION}/probe-results.txt"
+
       - name: Run integration lane
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -144,24 +165,43 @@ jobs:
       # so it catches the exit-0-but-crashed case. (The real fix belongs in the
       # gradle integration-test harness / probe; this is the observability guard
       # until that lands — and it is a no-op when the server booted cleanly.)
-      - name: Assert server did not crash (false-green backstop)
+      # Truth check: a lane passes ONLY if the probe plugin actually booted inside the
+      # server and reported allPassed. The run-task harness has been observed to exit 0
+      # even when the server DIES at boot (e.g. the PaperSpigot 1.7.10 timings NPE:
+      # Bukkit.getPluginManager() returns null in CustomTimingsHandler.startTiming during
+      # MinecraftServer boot) — a crashed server never wrote probe-results.txt, so its
+      # absence is a hard fail. Also scan the log for a fatal-crash signature. Runs
+      # regardless of the gradle exit code so it catches the exit-0-but-crashed case.
+      - name: Assert probe ran and passed (false-green backstop)
         if: ${{ !cancelled() }}
         env:
           PLATFORM: ${{ matrix.platform }}
           VERSION: ${{ matrix.version }}
         run: |
-          LOG_DIR="run/${PLATFORM}/${VERSION}/logs"
-          if [ ! -d "$LOG_DIR" ]; then
-            echo "No log dir at ${LOG_DIR} — nothing to scan."
-            exit 0
-          fi
-          PATTERN='Encountered an unexpected exception|Failed to start the minecraft server|This crash report has been saved|Exception (initializing|stopping) server'
-          if grep -rIlE "$PATTERN" "$LOG_DIR" >/dev/null 2>&1; then
-            echo "::error::Fatal server-crash signature in ${LOG_DIR} — this lane did NOT truly pass (harness reported success over a dead server)."
-            grep -rInE "$PATTERN" "$LOG_DIR" | head -20 || true
+          RUN_DIR="run/${PLATFORM}/${VERSION}"
+          RESULTS="${RUN_DIR}/probe-results.txt"
+          LOG_DIR="${RUN_DIR}/logs"
+          # 1) The probe sentinel must exist and report allPassed=true for THIS boot.
+          if [ ! -f "$RESULTS" ]; then
+            echo "::error::${RESULTS} is missing — the probe never ran (server crashed at boot or the plugin failed to enable). Lane did NOT pass."
+            [ -d "$LOG_DIR" ] && { echo '--- last 60 log lines ---'; find "$LOG_DIR" -name '*.log' -exec tail -n 60 {} +; }
             exit 1
           fi
-          echo "No fatal server-crash signature in ${LOG_DIR}."
+          echo "--- probe-results.txt ---"; cat "$RESULTS"
+          if ! grep -q '^allPassed=true$' "$RESULTS"; then
+            echo "::error::Probe reported failures for ${PLATFORM} ${VERSION} (allPassed != true)."
+            exit 1
+          fi
+          # 2) Belt-and-suspenders: no fatal-crash signature in the server log.
+          if [ -d "$LOG_DIR" ]; then
+            PATTERN='Encountered an unexpected exception|Failed to start the minecraft server|This crash report has been saved|Exception (initializing|stopping) server'
+            if grep -rIlE "$PATTERN" "$LOG_DIR" >/dev/null 2>&1; then
+              echo "::error::Fatal server-crash signature in ${LOG_DIR} despite a probe result."
+              grep -rInE "$PATTERN" "$LOG_DIR" | head -20 || true
+              exit 1
+            fi
+          fi
+          echo "Lane truly passed: probe booted, allPassed=true, no crash signature."
 
       - name: Upload server logs (failure only)
         if: failure()
