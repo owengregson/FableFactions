@@ -369,11 +369,20 @@ abstract class MergeTiersTask : DefaultTask() {
         out.parentFile.mkdirs()
         // Fixed timestamp on injected entries keeps the canonical jar deterministic.
         val injectedTime = 315532800000L
+        // A .jar is a zip, and a zip may legally carry two entries with the same name; shadow/jvmdg
+        // can emit an identical relocated runtime shim (e.g. the J_L_Record stub) more than once, and
+        // ZipOutputStream.putNextEntry THROWS on the second — a non-deterministic build failure now
+        // that this jar gates `check`. Dedup on write (first occurrence wins; colliding shims are
+        // byte-identical), and log any skip so the upstream duplicate stays visible rather than
+        // silently masked.
+        val written = hashSetOf<String>()
+        val skipped = sortedSetOf<String>()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(out))).use { zos ->
             ZipFile(tier8Jar.get().asFile).use { zip ->
                 val es = zip.entries()
                 while (es.hasMoreElements()) {
                     val entry = es.nextElement()
+                    if (!written.add(entry.name)) { skipped.add(entry.name); continue }
                     val copy = ZipEntry(entry.name)
                     copy.time = entry.time
                     zos.putNextEntry(copy)
@@ -382,6 +391,7 @@ abstract class MergeTiersTask : DefaultTask() {
                 }
             }
             for ((name, bytes) in inject) {
+                if (!written.add(name)) { skipped.add(name); continue }
                 val e = ZipEntry(name)
                 e.time = injectedTime
                 zos.putNextEntry(e)
@@ -393,6 +403,10 @@ abstract class MergeTiersTask : DefaultTask() {
         val shimCount = inject.size - firstPartyCount
         logger.lifecycle("[mergeTiers] canonical ${out.name}: +versions/13 with $firstPartyCount first-party " +
             "v57 class(es) + $shimCount jvmdg runtime class(es) absent from the tier-8 bundle.")
+        if (skipped.isNotEmpty()) {
+            logger.lifecycle("[mergeTiers] de-duplicated ${skipped.size} repeated zip entry name(s) " +
+                "(first occurrence kept): ${skipped.take(5)}")
+        }
     }
 }
 
