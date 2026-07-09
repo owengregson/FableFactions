@@ -11,15 +11,15 @@ paper-floor = "1.13.2-R0.1-SNAPSHOT"
 paper-folia = "1.20.4-R0.1-SNAPSHOT"
 paper-modern = "1.20.6-R0.1-SNAPSHOT"
 
-# Shaded + relocated into the FableFactions jar (dev.fablemc.factions.lib.adventure)
-# so a self-contained Adventure — the legacy-string serializer especially — is present
-# below Paper 1.16.5 where net.kyori is absent from the server. Adventure 5.x publishes
-# Gradle Module Metadata pinning org.gradle.jvm.version=21; it is consumed via the
-# BUILD-HIGH path (root build.gradle.kts raises the consumer TargetJvmVersion to 21),
-# and jvmdg downgrades its Java-21/v65 bytecode to the v52 base tree while keeping the
-# pristine v65 originals under META-INF/versions/21 for Java-21+ JVMs. Our MiniMessage/
-# Component/LegacyComponentSerializer call sites are stable across 4→5 (no .java change).
-adventure = "5.2.0"
+# Shaded + relocated into the FableFactions jar (dev.fablemc.factions.lib.adventure) so a
+# self-contained Adventure — the legacy-string serializer especially — is present below Paper
+# 1.16.5 where net.kyori is absent from the server. Held at the latest 4.x (Java-8-native, base
+# tier). Adventure 5.x IS consumable via build-high (jvm.version=21 → downgrade), and the API
+# needs no .java change — but 5.x pulls in far more modern-JDK APIs, and jvmdg's shim-stub set for
+# them composes non-deterministically with the versions/13 + versions/21 tiers (green locally, but
+# verifyJdk8Api flagged missing base-tree stubs in CI). Deferred until the multi-tier stub merge is
+# made deterministic; the other deps modernized without it.
+adventure = "4.26.1"
 
 # Storage stack, shaded + relocated under dev.fablemc.factions.lib.*. The connection pool is
 # Apache Commons DBCP2 (with commons-pool2): its LATEST releases still target Java 8, so they

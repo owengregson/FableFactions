@@ -548,7 +548,6 @@ abstract class VerifyDowngradeTask : DefaultTask() {
         val baseBytesByLogical = mutableMapOf<String, ByteArray>()
         val allEntryNames = hashSetOf<String>()
         val v13JvmdgRefs = sortedSetOf<String>()
-        var v21DepClasses = 0
 
         JarFile(file).use { jar ->
             val mr = jar.manifest?.mainAttributes?.getValue("Multi-Release")
@@ -585,24 +584,8 @@ abstract class VerifyDowngradeTask : DefaultTask() {
                         v13JvmdgRefs.addAll(MegaJarScan.tokensWithPrefix(text, jvmdgRuntime))
                         if (name == "META-INF/versions/13/$sentinel") v13SentinelMajor = major
                     }
-                    name.startsWith("META-INF/versions/21/") -> {
-                        // Modern-dependency tier (build-high). jvmdg keeps a shaded dep's ORIGINAL
-                        // post-v61 bytecode here when the dep was built on a newer JDK than the
-                        // first-party v61 floor (Adventure 5.x is Java-21 / v65): only 21+ JVMs load
-                        // it, everyone else runs the v52 base copy jvmdg produced. Valid ONLY if it
-                        // carries relocated third-party (lib.*) classes and NO first-party (which must
-                        // stay in the 13/17 tiers), with genuinely post-v61 bytecode — assert that
-                        // shape rather than blanket-accepting versions/21, so a real leak still fails.
-                        if (MegaJarScan.isFirstParty(logical)) {
-                            problems.add("versions/21 carries first-party class $logical (first-party must stay in versions/13-17)")
-                        } else if (major <= 61) {
-                            problems.add("versions/21 dep class $logical is v$major (not a post-v61 modern-dependency tier)")
-                        } else {
-                            v21DepClasses++
-                        }
-                    }
                     name.startsWith("META-INF/versions/") ->
-                        problems.add("unexpected versioned tier entry $name (only versions/13, versions/17 and the versions/21 modern-dep tier are expected)")
+                        problems.add("unexpected versioned tier entry $name (only versions/13 and versions/17 are expected)")
                     else -> {
                         if (major > 52) problems.add("base entry $logical is v$major (>52)")
                         if (MegaJarScan.isFirstParty(logical)) {
@@ -650,8 +633,7 @@ abstract class VerifyDowngradeTask : DefaultTask() {
             problems.take(30).joinToString("\n") { "  - $it" })
         report.get().asFile.writeText("ok\n")
         logger.lifecycle("[verifyDowngrade] OK — base ≤ v52; ${v13FirstParty.size} first-party class(es) forked to v57 under versions/13; " +
-            "${v17FirstParty.size} to v61 under versions/17; sentinel forked 52/57/61; no reflective-record token; versions/13 jvmdg refs resolve" +
-            (if (v21DepClasses > 0) "; $v21DepClasses post-v61 modern-dep class(es) under versions/21 (build-high dep originals)." else "."))
+            "${v17FirstParty.size} to v61 under versions/17; sentinel forked 52/57/61; no reflective-record token; versions/13 jvmdg refs resolve.")
     }
 }
 
