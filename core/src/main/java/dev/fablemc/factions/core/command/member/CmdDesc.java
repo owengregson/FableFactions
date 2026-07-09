@@ -39,7 +39,10 @@ final class CmdDesc extends CommandNode {
         if (CommandFlow.blocked(ctx, CommandGuards.requireOwner(snap, actor))) {
             return;
         }
-        String description = String.join(" ", ctx.args()).trim();
+        // Strip the legacy section sign so a player can't smuggle raw colour/format codes into
+        // their description and have them render in other players' /f info (finding #44). '&' is
+        // left intact — it is a legitimate character and the render path never translates it.
+        String description = CommandFlow.stripLegacyCodes(String.join(" ", ctx.args()).trim());
         if (description.length() > MAX_DESCRIPTION) {
             ctx.sendReason(ReasonCode.DESCRIPTION_TOO_LONG);
             return;

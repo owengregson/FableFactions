@@ -100,6 +100,15 @@ public final class CommandFlow {
         return world == null ? "" : world.getName();
     }
 
+    /**
+     * Removes the legacy section sign (U+00A7) from free-text player input (faction description /
+     * MOTD) so raw colour/format codes cannot be smuggled into another player's view (finding #44).
+     * The following code letter is left as ordinary text; {@code &amp;} is intentionally preserved.
+     */
+    public static String stripLegacyCodes(String text) {
+        return text.indexOf('§') < 0 ? text : text.replace("§", "");
+    }
+
     /** {@code Locale.ROOT} two-decimal money format (parity with the reference bank lines). */
     public static String money(double value) {
         return String.format(Locale.ROOT, "%.2f", value);

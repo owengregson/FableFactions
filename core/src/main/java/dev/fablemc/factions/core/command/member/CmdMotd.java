@@ -68,7 +68,7 @@ final class CmdMotd extends CommandNode {
             CommandFlow.submit(ctx, actor, new LifecycleIntent.SetMotd(handle, "", actor), CLEARED);
             return;
         }
-        String motd = String.join(" ", ctx.args()).trim();
+        String motd = CommandFlow.stripLegacyCodes(String.join(" ", ctx.args()).trim());
         if (motd.length() > MAX_MOTD) {
             ctx.send(TOO_LONG);
             return;
