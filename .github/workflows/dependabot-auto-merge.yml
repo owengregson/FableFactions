@@ -1,0 +1,59 @@
+# Dependabot auto-merge — lets safe dependency PRs merge themselves once every
+# required gate is green, so the maintainer only reviews the risky ones.
+#
+# Flow: Dependabot opens a PR → ci.yml (build + all verification gates incl. the
+# verifyJdk8Api Java-8 gate + unit/property suites) runs → Copilot review runs
+# (repo ruleset) → this workflow approves patch/minor bumps and turns on GitHub
+# auto-merge → GitHub squash-merges ONLY after the required "Build + verification
+# gates" check passes and the branch-protection review requirement is satisfied
+# (this approval provides it). Major bumps are never auto-merged — they wait for a
+# human — and the spec-pinned lines (AM-10 storage stack, jqwik/junit coupling,
+# adventure major, paper API floors) are ignored in dependabot.yml so they never
+# reach here at all.
+#
+# pull_request_target is required so the token has write access to approve/merge;
+# it is hard-scoped to actor == dependabot[bot], and only Dependabot's own metadata
+# drives the decision, so there is no untrusted-code execution path.
+
+name: Dependabot auto-merge
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Patch + minor bumps (and the grouped minor/patch update) are low-risk and
+      # fully gated by CI; approve them and enable auto-merge. Anything major stops
+      # here for a human.
+      - name: Approve and enable auto-merge
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL" \
+            --body "Auto-approved: ${{ steps.meta.outputs.dependency-names }} ${{ steps.meta.outputs.update-type }} — merges once required checks pass."
+          gh pr merge --auto --squash "$PR_URL"
+
+      - name: Comment on major updates (manual review)
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "$PR_URL" --body "Major update for ${{ steps.meta.outputs.dependency-names }} — NOT auto-merged. A maintainer must review it against the Java-8 base-tier / API-floor constraints (docs/design/per-version-dependencies.md, AM-10)."

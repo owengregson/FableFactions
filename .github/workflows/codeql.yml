@@ -1,0 +1,66 @@
+# CodeQL — advanced setup (chosen over GitHub default setup for the extra control:
+# the security-extended query suite, buildless Java analysis, and source-scoped
+# triggers). Default setup is left not-configured so the two never conflict.
+#
+# build-mode: none — CodeQL analyses the Java source directly, with NO Gradle build.
+# For a jvmdg-downgraded, heavily-relocated mega-jar that is a big win: analysis is
+# fast, needs no toolchain/JDK provisioning, and sees the real first-party source
+# (v61) rather than the downgraded v52 bytecode. `actions` scans the workflows too.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.java'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.java'
+      - '.github/workflows/**'
+  schedule:
+    # Weekly deep scan, Monday 05:19 UTC (off the :00 rush) — catches advisories
+    # published against unchanged code.
+    - cron: '19 5 * * 1'
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write   # upload the SARIF results to the Security tab
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: none
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended adds the higher-recall security queries on top of the
+          # default suite — appropriate for a plugin whose worst bugs are economy/item
+          # dupes and state-corruption paths.
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
