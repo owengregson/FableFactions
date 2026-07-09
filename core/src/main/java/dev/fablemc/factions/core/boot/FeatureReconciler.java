@@ -40,6 +40,7 @@ import dev.fablemc.factions.kernel.config.ConfigImage;
 import dev.fablemc.factions.kernel.effect.Effect;
 import dev.fablemc.factions.kernel.effect.SystemEffect;
 import dev.fablemc.factions.kernel.intent.SessionIntent;
+import dev.fablemc.factions.kernel.intent.SystemIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.platform.gui.MenuModel;
 import dev.fablemc.factions.platform.probe.Capabilities;
@@ -182,6 +183,11 @@ public final class FeatureReconciler {
         TaxScheduler taxScheduler = new TaxScheduler(assembly.scheduling(), bus, snapshots, tick);
         taxScheduler.start();
         s.closeable(taxScheduler::stop);
+        // AM-4: low-frequency aggregate reconciliation (every 30 min). The reducer recomputes a
+        // rotating subset of factions from ground truth, self-heals any landCount drift, and emits a
+        // loud AggregateDriftDetected effect — drift is a bug signal, never silent.
+        s.task(assembly.scheduling().repeatAsync(Duration.ofMinutes(30), Duration.ofMinutes(30),
+                () -> bus.submitSystem(new SystemIntent.ReconcileSweep(0))));
         // AM-11: refresh the H2 advisory-lock fence on the storage cadence.
         s.task(assembly.scheduling().repeatAsync(Duration.ofSeconds(15), Duration.ofSeconds(15),
                 assembly.storage()::heartbeat));

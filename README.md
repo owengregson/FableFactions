@@ -34,7 +34,7 @@ Full design details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | **Roles & flags** | Custom roles with priorities and chat prefixes, per-faction flags, faction audit log |
 | **Merges** | Full faction merges via request/accept flow — members, land, and bank combined atomically |
 | **Predefined factions** | Server-defined presets (spawn factions, staff factions) managed in `pre-defined.yml` |
-| **Localization** | 8 bundled languages — English, German, Spanish, French, Japanese, Portuguese (BR), Russian, Chinese — switchable per player with `/f language` |
+| **Localization** | Fully externalized message catalog (MiniMessage) with a per-player `/f language` seam and a locale waterfall. English ships in v1.0.0-beta.1; additional translations are planned once they can be kept in parity |
 | **Integrations** | Vault, WorldGuard, WorldEdit, PlaceholderAPI, Essentials/EssentialsX, dynmap, LWC/LWCX, DiscordSRV, EzCountdown, TeamsAPI · bStats metrics · update checker |
 
 ## 🧩 Compatibility
