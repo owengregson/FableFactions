@@ -66,8 +66,17 @@ final class ChestReducer {
         if (existing == null) {
             return;
         }
+        // MEDIUM #26: honor the session nonce. Session nonces are monotonic per chest, so a commit
+        // whose nonce is below the recorded winner is a stale session's late write — dropping it
+        // silently prevents the lost-update/dupe where an evicted session overwrites a newer one.
+        // The winner (max) is recorded so a still-newer session can supersede in turn.
+        long recorded = s.state.chests().nonceOf(f.idx(), c.name());
+        if (c.sessionNonce() < recorded) {
+            return;
+        }
+        long nonce = Math.max(recorded, c.sessionNonce());
         s.state = s.state.withChests(s.state.chests().set(f.idx(),
-                new ChestRef(existing.name(), c.blobRef(), existing.createdAt())));
+                new ChestRef(existing.name(), c.blobRef(), existing.createdAt()), nonce));
         s.emit(new ChestEffect.ChestContentsChanged(s.seq, s.origin, c.faction(), c.name(), c.blobRef()));
     }
 }

@@ -12,6 +12,8 @@ import dev.fablemc.factions.core.command.CommandContext;
 import dev.fablemc.factions.core.command.CommandGuards;
 import dev.fablemc.factions.core.command.CommandNode;
 import dev.fablemc.factions.core.command.member.CommandFlow;
+import dev.fablemc.factions.kernel.ids.ChunkKeys;
+import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.TravelIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.state.Faction;
@@ -30,6 +32,7 @@ final class CmdWarpSet extends CommandNode {
 
     private static final int COORD_ARG_COUNT = 4;
     private static final MessageKey SET = MessageKey.of("warp.set");
+    private static final MessageKey SET_PROTECTED = MessageKey.of("custom.warp.set-protected");
 
     private final Worlds worlds;
 
@@ -53,6 +56,15 @@ final class CmdWarpSet extends CommandNode {
         Faction faction = CommandGuards.factionOf(snap, actor);
         Location target = resolveLocation(ctx);
         int worldIdx = worlds.register(target.getWorld().getUID());
+        // Own-territory guard (finding #13): the RESOLVED target chunk — which may be arbitrary
+        // x/y/z/world coords, never actually visited — must be the faction's own claim, blocking the
+        // "scout enemy base, /f warp set raid <coords>, warp the squad in" insertion exploit.
+        long chunkKey = ChunkKeys.key(target.getBlockX() >> 4, target.getBlockZ() >> 4);
+        int owner = snap.claimOwnerAt(worldIdx, chunkKey);
+        if (owner == FactionHandle.WILDERNESS || FactionHandle.ordinal(owner) != faction.idx()) {
+            ctx.send(SET_PROTECTED);
+            return;
+        }
         String name = ctx.arg(0).toLowerCase(Locale.ROOT);
         CommandFlow.submit(ctx, actor,
                 new TravelIntent.SetWarp(CommandFlow.handleOf(snap, faction), name, worldIdx,

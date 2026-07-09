@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 
+import dev.fablemc.factions.core.chest.ChestCloseListener;
 import dev.fablemc.factions.core.chest.ChestSessions;
 import dev.fablemc.factions.core.command.CommandContext;
 import dev.fablemc.factions.core.command.FCommandExecutor;
@@ -117,7 +118,7 @@ public final class FeatureReconciler {
         // ── sessions / teleport / chests / GUI ──────────────────────────────────────────────────
         CombatTags combat = CombatTags.defaults();
         TeleportSaga teleport = new TeleportSaga(assembly.scheduling(), sessions, messages, worlds,
-                vault, combat, snapshots, caps);
+                vault, combat, snapshots, caps, integrations.essentialsInterop());
 
         ItemCodec itemCodec = ItemCodec.create(caps.serializeAsBytes());
         ChestSessions.BlobReader blobReader = (ref, onLoaded) ->
@@ -135,6 +136,7 @@ public final class FeatureReconciler {
         MenuManager menus = new MenuManager(snapshots, sessions, messages, bus, assembly.catalog(),
                 Map.<String, MenuModel>of());
         s.listen(new GuiListener(menus));
+        s.listen(new ChestCloseListener(liveChests));
 
         // ── protection / event listeners (baseline direct, probe-gated via ListenerGate, AM-13) ──
         ListenerContext ctx = new ListenerContext(snapshots, bus, messages, worlds, assembly.scheduling(),
@@ -198,8 +200,15 @@ public final class FeatureReconciler {
         replayOnlinePlayers();
     }
 
-    /** Closes the current feature scope and rebuilds it from the (now-swapped) config image. */
+    /**
+     * Closes the current feature scope and rebuilds it from the (now-swapped) config image. Open chest
+     * sessions are committed + closed FIRST so no chest edit made under the old config is lost across
+     * the reload (cross-agent chest hook, part a). This runs on the {@code ConfigSwapped} path; a
+     * strictly pre-swap commit (before the {@code SwapConfig} intent) would require a pre-swap hook in
+     * {@code ReloadsImpl}, which is outside this slice's edit scope.
+     */
     public void reconverge() {
+        forceCommitChests();   // ChestSessions.commitAndCloseAll() when the chest agent lands it
         close();
         converge();
         logger.info("[reload] features reconverged from the swapped config image.");
@@ -213,7 +222,12 @@ public final class FeatureReconciler {
         }
     }
 
-    /** Force-commits every open chest session onto the system lane (ordered disable, §6.4). */
+    /**
+     * Force-commits every open chest session onto the system lane (ordered disable §6.4 part b, and
+     * the reload path part a). This is the call site the chest agent's {@code commitAndCloseAll()}
+     * should replace {@code forceCommitAll()} at once landed — both the {@link BootAssembly#shutdown}
+     * hook and {@link #reconverge()} route through here.
+     */
     public void forceCommitChests() {
         if (chests != null) {
             chests.forceCommitAll();

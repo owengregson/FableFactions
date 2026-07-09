@@ -27,41 +27,68 @@ import javax.sql.DataSource;
  */
 public final class AdvisoryLock implements AutoCloseable {
 
+    /** A fence-loss notifier that does nothing (the historic behaviour / test default). */
+    public static final Runnable IGNORE_FENCE_LOSS = () -> { };
+
     private final DataSource dataSource;
     private final String lockName;
     private final UUID owner;
     private final long ttlMillis;
     private final LongSupplier clock;
     private final Connection heldMysqlConnection;   // non-null only for MySQL
+    private final Runnable onFenceLost;
     private boolean released;
+    private boolean fenceLostFired;
 
     private AdvisoryLock(DataSource dataSource, String lockName, UUID owner,
-                         long ttlMillis, LongSupplier clock, Connection heldMysqlConnection) {
+                         long ttlMillis, LongSupplier clock, Connection heldMysqlConnection,
+                         Runnable onFenceLost) {
         this.dataSource = dataSource;
         this.lockName = lockName;
         this.owner = owner;
         this.ttlMillis = ttlMillis;
         this.clock = clock;
         this.heldMysqlConnection = heldMysqlConnection;
+        this.onFenceLost = onFenceLost == null ? IGNORE_FENCE_LOSS : onFenceLost;
+    }
+
+    /** @see #tryAcquire(DataSource, SqlDialect, String, UUID, long, LongSupplier, Runnable) */
+    public static AdvisoryLock tryAcquire(DataSource dataSource, SqlDialect dialect, String dbKey,
+                                          UUID owner, long ttlMillis, LongSupplier clock)
+            throws SQLException {
+        return tryAcquire(dataSource, dialect, dbKey, owner, ttlMillis, clock, IGNORE_FENCE_LOSS);
     }
 
     /**
      * Attempts to acquire the lock for {@code dbKey}. Returns the held lock, or {@code null} if a
-     * live instance already holds it (a second boot refuses read-write).
+     * live instance already holds it (a second boot refuses read-write). {@code onFenceLost} is
+     * invoked (once) by {@link #heartbeat()} if this instance later discovers it no longer owns the
+     * fence — an H2 takeover after expiry, or a dropped MySQL {@code GET_LOCK} connection — so the
+     * caller can disable the plugin loudly rather than keep writing behind a stolen lock (AM-11).
      */
     public static AdvisoryLock tryAcquire(DataSource dataSource, SqlDialect dialect, String dbKey,
-                                          UUID owner, long ttlMillis, LongSupplier clock)
-            throws SQLException {
+                                          UUID owner, long ttlMillis, LongSupplier clock,
+                                          Runnable onFenceLost) throws SQLException {
         String lockName = "fablefactions:" + dbKey;
         if (MySqlDialect.NAME.equals(dialect.name())) {
-            return tryAcquireMysql(dataSource, lockName, owner, ttlMillis, clock);
+            return tryAcquireMysql(dataSource, lockName, owner, ttlMillis, clock, onFenceLost);
         }
-        return tryAcquireH2(dataSource, lockName, owner, ttlMillis, clock);
+        return tryAcquireH2(dataSource, lockName, owner, ttlMillis, clock, onFenceLost);
     }
 
-    /** Refreshes the H2 lock's expiry; a no-op for MySQL (its lock is connection-scoped). */
+    /**
+     * Refreshes the fence AND verifies we still own it (AM-11 fencing, finding #4). H2: the expiry
+     * bump is conditioned on us still being {@code lock_owner}; if it updates zero rows another
+     * instance took over after our expiry — we fire {@code onFenceLost} and go read-only. MySQL: the
+     * {@code GET_LOCK} is connection-scoped, so a dropped/invalid lock connection means the lock was
+     * silently released server-side — we detect it and fire {@code onFenceLost}.
+     */
     public void heartbeat() throws SQLException {
-        if (released || heldMysqlConnection != null) {
+        if (released) {
+            return;
+        }
+        if (heldMysqlConnection != null) {
+            heartbeatMysql();
             return;
         }
         long now = clock.getAsLong();
@@ -70,8 +97,43 @@ public final class AdvisoryLock implements AutoCloseable {
                      "UPDATE `ff_meta` SET `lock_expiry`=? WHERE `id`=0 AND `lock_owner`=?")) {
             ps.setLong(1, now + ttlMillis);
             ps.setString(2, owner.toString());
-            ps.executeUpdate();
+            int updated = ps.executeUpdate();
+            if (updated != 1) {
+                fenceLost("H2 advisory lock was taken over by another instance (our fence expired)");
+            }
         }
+    }
+
+    private void heartbeatMysql() {
+        boolean stillOurs = false;
+        try {
+            if (!heldMysqlConnection.isClosed() && heldMysqlConnection.isValid(2)) {
+                try (PreparedStatement ps = heldMysqlConnection.prepareStatement(
+                        "SELECT IS_USED_LOCK(?) = CONNECTION_ID()");
+                     ResultSet rs = ps.executeQuery()) {
+                    stillOurs = rs.next() && rs.getBoolean(1);
+                }
+            }
+        } catch (SQLException dropped) {
+            stillOurs = false;   // connection blip → the server released our lock
+        }
+        if (!stillOurs) {
+            fenceLost("MySQL GET_LOCK connection was dropped/lost — the advisory lock is no longer held");
+        }
+    }
+
+    private void fenceLost(String reason) {
+        if (fenceLostFired) {
+            return;
+        }
+        fenceLostFired = true;
+        released = true;   // stop refreshing; we no longer own the fence
+        try {
+            onFenceLost.run();
+        } catch (RuntimeException ignored) {
+            // the handler is responsible for its own failures; never mask the fence-loss signal
+        }
+        throw new StorageException("advisory lock fence lost — " + reason + " (AM-11)");
     }
 
     /** {@code true} if this process currently owns the lock. */
@@ -109,7 +171,8 @@ public final class AdvisoryLock implements AutoCloseable {
     }
 
     private static AdvisoryLock tryAcquireH2(DataSource dataSource, String lockName, UUID owner,
-                                             long ttlMillis, LongSupplier clock) throws SQLException {
+                                             long ttlMillis, LongSupplier clock, Runnable onFenceLost)
+            throws SQLException {
         long now = clock.getAsLong();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -122,14 +185,14 @@ public final class AdvisoryLock implements AutoCloseable {
             ps.setString(4, owner.toString());
             int updated = ps.executeUpdate();
             if (updated == 1) {
-                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, null);
+                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, null, onFenceLost);
             }
             return null;   // held by another live instance and not expired
         }
     }
 
     private static AdvisoryLock tryAcquireMysql(DataSource dataSource, String lockName, UUID owner,
-                                                long ttlMillis, LongSupplier clock)
+                                                long ttlMillis, LongSupplier clock, Runnable onFenceLost)
             throws SQLException {
         Connection conn = dataSource.getConnection();
         boolean ok = false;
@@ -139,7 +202,7 @@ public final class AdvisoryLock implements AutoCloseable {
                 ok = rs.next() && rs.getInt(1) == 1;
             }
             if (ok) {
-                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, conn);
+                return new AdvisoryLock(dataSource, lockName, owner, ttlMillis, clock, conn, onFenceLost);
             }
             return null;
         } finally {

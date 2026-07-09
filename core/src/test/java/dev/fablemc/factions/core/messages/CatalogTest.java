@@ -25,11 +25,11 @@ import dev.fablemc.factions.core.messages.LocaleTables.Template;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 
 /**
- * Pins the message catalog: all eight shipped bundles carry the identical key set (the reference
- * parity contract), the locale waterfall (preferred → default → en → raw key) resolves correctly,
- * BCP-47 tags normalize to the right index, and a user-supplied arg is substituted as LITERAL text
- * (never re-parsed as MiniMessage — the tag-injection kill, AM-1). Reads the real {@code .yml}
- * resources off the classpath.
+ * Pins the message catalog: English is the sole shipped bundle for now (the translations are not
+ * yet maintainable), the locale waterfall (preferred → default → en → raw key) resolves correctly,
+ * an unknown/foreign tag degrades to the default locale, and a user-supplied arg is substituted as
+ * LITERAL text (never re-parsed as MiniMessage — the tag-injection kill, AM-1). Reads the real
+ * {@code .yml} resources off the classpath.
  */
 final class CatalogTest {
 
@@ -39,9 +39,12 @@ final class CatalogTest {
             name -> CatalogTest.class.getResourceAsStream("/" + name);
 
     @Test
-    void allEightBundlesHaveTheIdenticalKeySet() {
+    void englishIsTheSoleShippedBundleAndIsNonEmpty() {
+        assertEquals(1, CatalogLoader.SHIPPED_LOCALES.length, "English-only for now (no maintained translations)");
+        assertEquals("en", CatalogLoader.SHIPPED_LOCALES[0]);
         TreeSet<String> reference = leafKeys("en");
         assertFalse(reference.isEmpty(), "en bundle must not be empty");
+        // If a translated bundle is ever re-added it must match en's key set exactly.
         for (String locale : CatalogLoader.SHIPPED_LOCALES) {
             TreeSet<String> keys = leafKeys(locale);
             TreeSet<String> missing = new TreeSet<>(reference);
@@ -62,23 +65,17 @@ final class CatalogTest {
     }
 
     @Test
-    void bcp47TagsNormalizeToTheRightIndex() {
+    void anyTagResolvesToTheEnglishDefaultWhileEnglishIsTheOnlyBundle() {
         LocaleTables catalog = CatalogLoader.load(RESOURCES, "en", new ArrayList<>());
-        int ptBr = catalog.localeIndex("pt-BR");
-        assertEquals("pt-BR", catalog.tagAt(ptBr));
-        assertEquals(ptBr, catalog.localeIndex("pt_BR"), "underscore form normalizes to the same index");
-        assertEquals(catalog.localeIndex("de"), catalog.localeIndex("DE"), "case-insensitive");
-        assertEquals(catalog.localeIndex("de"), catalog.localeIndex("de_AT"),
-                "region-only miss degrades to the language");
-        assertEquals(catalog.defaultLocale(), catalog.localeIndex("xx"), "unknown tag → default locale");
-    }
-
-    @Test
-    void translatedKeyRendersInTheChosenLocale() {
-        LocaleTables catalog = CatalogLoader.load(RESOURCES, "en", new ArrayList<>());
-        int de = catalog.localeIndex("de");
-        String rendered = LEGACY.serialize(catalog.render(de, MessageKey.of("faction.name-taken")));
-        assertTrue(rendered.contains("Fraktion"), () -> "expected a German string, got: " + rendered);
+        int en = catalog.localeIndex("en");
+        assertEquals("en", catalog.tagAt(en));
+        assertEquals(en, catalog.defaultLocale(), "en is the default");
+        // With no translated bundles loaded, every foreign/unknown/underscore/cased tag degrades to
+        // the English default rather than failing (the waterfall's terminal tier).
+        assertEquals(en, catalog.localeIndex("de"), "foreign tag → default");
+        assertEquals(en, catalog.localeIndex("pt_BR"), "underscore form → default");
+        assertEquals(en, catalog.localeIndex("DE"), "case-insensitive → default");
+        assertEquals(en, catalog.localeIndex("xx"), "unknown tag → default locale");
     }
 
     @Test

@@ -9,10 +9,13 @@ import dev.fablemc.factions.core.command.CommandContext;
 import dev.fablemc.factions.core.command.CommandGuards;
 import dev.fablemc.factions.core.command.CommandNode;
 import dev.fablemc.factions.core.command.member.CommandFlow;
+import dev.fablemc.factions.core.pipeline.SubmitResult;
 import dev.fablemc.factions.kernel.ids.ChunkKeys;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
+import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.intent.PrefIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
+import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.MemberView;
@@ -33,6 +36,7 @@ final class CmdFly extends CommandNode {
 
     private static final MessageKey DISABLED_GLOBAL = MessageKey.of("custom.fly.disabled-global");
     private static final MessageKey OWN_TERRITORY = MessageKey.of("custom.fly.own-territory-required");
+    private static final MessageKey COMBAT_BLOCKED = MessageKey.of("custom.travel.combat-blocked");
     private static final MessageKey ENABLED = MessageKey.of("fly.enabled");
     private static final MessageKey DISABLED = MessageKey.of("fly.disabled");
 
@@ -62,13 +66,29 @@ final class CmdFly extends CommandNode {
             ctx.send(OWN_TERRITORY);
             return;
         }
-        boolean newState = !currentFly(snap, actor);
         Player player = ctx.player();
-        player.setAllowFlight(newState);
-        if (!newState && player.isFlying()) {
-            player.setFlying(false);
+        boolean newState = !currentFly(snap, actor);
+        // (#30a) Deny ENABLING flight while combat-tagged — flight would be a free escape from a fight.
+        // Read the tag via the Travel seam (it owns combat-tag gating). Disabling stays allowed.
+        if (newState && ctx.services().travel().inCombat(player)) {
+            ctx.send(COMBAT_BLOCKED);
+            return;
         }
-        CommandFlow.submit(ctx, actor, new PrefIntent.SetFly(actor, newState), newState ? ENABLED : DISABLED);
+        // (#30b) Touch setAllowFlight ONLY after the SetFly pref is ACCEPTED. Granting it before submit
+        // left flight enabled with the pref unset on a REJECTED_BUSY — a permanent-revocation desync.
+        // Mirror CommandFlow.submit's lane handling so the client-side grant lands only on ACCEPTED.
+        SubmitResult result = ctx.services().bus().submit(new PrefIntent.SetFly(actor, newState), Origin.player(actor));
+        switch (result) {
+            case ACCEPTED -> {
+                player.setAllowFlight(newState);
+                if (!newState && player.isFlying()) {
+                    player.setFlying(false);
+                }
+                ctx.send(newState ? ENABLED : DISABLED);
+            }
+            case REJECTED_BUSY -> ctx.sendReason(ReasonCode.BUSY);
+            case REJECTED_SHUTDOWN -> ctx.sendReason(ReasonCode.SHUTTING_DOWN);
+        }
     }
 
     private boolean inOwnTerritory(Player player, KernelSnapshot snap, int ownOrdinal) {

@@ -72,12 +72,25 @@ public final class MenuManager implements Menus {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.bus = Objects.requireNonNull(bus, "bus");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
-        this.menus = Map.copyOf(menus);
+        this.menus = resolveCatalog(menus);
     }
 
     /** Swaps the parsed menu catalog (config reload). */
     public void setMenus(Map<String, MenuModel> menus) {
-        this.menus = Map.copyOf(menus);
+        this.menus = resolveCatalog(menus);
+    }
+
+    /**
+     * Uses the injected catalog when it carries menus; otherwise falls back to the shipped
+     * {@code gui.yml} bundled on the classpath ({@link MenuCatalog#bundledDefaults()}) so
+     * {@code /f gui} and {@code /f language} open the default menus even before the boot layer parses
+     * the operator's data-folder {@code gui.yml} into an injected catalog.
+     */
+    private static Map<String, MenuModel> resolveCatalog(Map<String, MenuModel> injected) {
+        if (injected != null && !injected.isEmpty()) {
+            return Map.copyOf(injected);
+        }
+        return MenuCatalog.bundledDefaults();
     }
 
     @Override

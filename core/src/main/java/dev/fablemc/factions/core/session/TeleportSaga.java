@@ -12,6 +12,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import dev.fablemc.factions.core.economy.VaultAdapter;
+import dev.fablemc.factions.core.integration.essentials.EssentialsInterop;
 import dev.fablemc.factions.core.pipeline.SnapshotHub;
 import dev.fablemc.factions.core.text.Messages;
 import dev.fablemc.factions.kernel.msg.MessageKey;
@@ -57,10 +58,17 @@ public final class TeleportSaga implements Travel {
     private final CombatTags combatTags;
     private final SnapshotHub snapshots;
     private final Capabilities caps;
+    /** EssentialsX jail/teleport façade for the {@code /f home} + {@code /f warp} jail gate; {@code null} disables the gate (graceful absence, ref-integrations §4). */
+    private final EssentialsInterop essentials;
 
-    /** Constructor injection (CONTRACTS §4): scheduler, sessions, text, world registry, Vault, combat, snapshots, caps. */
+    /**
+     * Full constructor injection (CONTRACTS §4): scheduler, sessions, text, world registry, Vault,
+     * combat, snapshots, caps, and the EssentialsX façade behind the jail gate. Boot should call this
+     * overload so a jailed player cannot {@code /f home} / {@code /f warp} out (finding #13 jail gate).
+     */
     public TeleportSaga(Scheduling scheduling, SessionRegistry sessions, Messages messages, Worlds worlds,
-                        VaultAdapter vault, CombatTags combatTags, SnapshotHub snapshots, Capabilities caps) {
+                        VaultAdapter vault, CombatTags combatTags, SnapshotHub snapshots, Capabilities caps,
+                        EssentialsInterop essentials) {
         this.scheduling = Objects.requireNonNull(scheduling, "scheduling");
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -69,10 +77,25 @@ public final class TeleportSaga implements Travel {
         this.combatTags = Objects.requireNonNull(combatTags, "combatTags");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.caps = Objects.requireNonNull(caps, "caps");
+        this.essentials = essentials;   // nullable: absent Essentials ⇒ no jail blocking (Noop parity)
+    }
+
+    /**
+     * Legacy constructor without the EssentialsX façade — the jail gate is disabled (parity with
+     * {@code NoopEssentialsInterop}). Retained so the current boot wiring still compiles; boot should
+     * migrate to the {@code essentials}-taking overload to actually block jailed teleports.
+     */
+    public TeleportSaga(Scheduling scheduling, SessionRegistry sessions, Messages messages, Worlds worlds,
+                        VaultAdapter vault, CombatTags combatTags, SnapshotHub snapshots, Capabilities caps) {
+        this(scheduling, sessions, messages, worlds, vault, combatTags, snapshots, caps, null);
     }
 
     @Override
     public void beginHome(Player player, KernelSnapshot snapshot) {
+        if (isJailed(player)) {
+            messages.to(player, Text.HOME_JAILED);
+            return;
+        }
         Faction faction = factionOf(player, snapshot);
         if (faction == null) {
             return; // command guard already reported the "not in a faction" case
@@ -88,12 +111,17 @@ public final class TeleportSaga implements Travel {
             return;
         }
         Location dest = new Location(world, home.x(), home.y(), home.z(), home.yaw(), home.pitch());
-        begin(player, dest, Text.HOME_TELEPORTING, Text.HOME_TELEPORTED, Text.HOME_TELEPORT_FAILED,
+        PlayerSession session = sessions.get(player.getUniqueId());
+        begin(player, session, dest, Text.HOME_TELEPORTING, Text.HOME_TELEPORTED, Text.HOME_TELEPORT_FAILED,
                 null, 0.0, false);
     }
 
     @Override
     public void beginWarp(Player player, String warpName, String password) {
+        if (isJailed(player)) {
+            messages.to(player, Text.WARP_JAILED);
+            return;
+        }
         KernelSnapshot snapshot = snapshots.current();
         Faction faction = factionOf(player, snapshot);
         if (faction == null) {
@@ -114,6 +142,19 @@ public final class TeleportSaga implements Travel {
             messages.to(player, Text.WORLD_NOT_LOADED);
             return;
         }
+        // Reject BEFORE charging (findings #14/#34/#36): a warmup already running or an active combat
+        // tag would otherwise take the player's money then silently drop the teleport with no refund.
+        // The charge below runs only once we know the saga will start; any later abort refunds.
+        PlayerSession session = sessions.get(player.getUniqueId());
+        long now = System.currentTimeMillis();
+        if (session != null && session.warmupTask() != null) {
+            messages.to(player, Text.ALREADY_WARMING);
+            return;
+        }
+        if (combatTags.inCombat(session, now)) {
+            messages.to(player, Text.COMBAT_BLOCKED);
+            return;
+        }
         double cost = warp.useCost();
         boolean charged = false;
         if (cost > 0.0) {
@@ -129,21 +170,41 @@ public final class TeleportSaga implements Travel {
             messages.to(player, Text.WARP_COST_CHARGED, money(cost), warp.name());
         }
         Location dest = new Location(world, warp.x(), warp.y(), warp.z(), warp.yaw(), warp.pitch());
-        begin(player, dest, Text.WARP_TELEPORTING, Text.WARP_TELEPORTED, Text.WARP_TELEPORT_FAILED,
+        begin(player, session, dest, Text.WARP_TELEPORTING, Text.WARP_TELEPORTED, Text.WARP_TELEPORT_FAILED,
                 warp.name(), cost, charged);
+    }
+
+    /**
+     * Whether {@code player} is currently combat-tagged — the read the {@code /f fly} command consults
+     * before enabling flight (finding #30). Delegates to the confined session's window via
+     * {@link CombatTags}; {@code false} when the player has no live session or tagging is disabled.
+     * Must be called on the player's region thread (reads the confined session, AM-14).
+     */
+    @Override
+    public boolean inCombat(Player player) {
+        PlayerSession session = sessions.get(player.getUniqueId());
+        return combatTags.inCombat(session, System.currentTimeMillis());
+    }
+
+    /** The jail gate: {@code true} only when a wired Essentials façade reports the player jailed. */
+    private boolean isJailed(Player player) {
+        return essentials != null && essentials.isJailed(player);
     }
 
     // ── warmup ───────────────────────────────────────────────────────────────────────────────
 
-    private void begin(Player player, Location dest, MessageKey warmingKey, MessageKey doneKey,
-                       MessageKey failedKey, String warpName, double cost, boolean charged) {
-        PlayerSession session = sessions.get(player.getUniqueId());
+    private void begin(Player player, PlayerSession session, Location dest, MessageKey warmingKey,
+                       MessageKey doneKey, MessageKey failedKey, String warpName, double cost, boolean charged) {
         if (session == null) {
             // Untracked player (no live session): teleport immediately, best-effort refund on failure.
             teleport(player, dest, doneKey, failedKey, charged, cost);
             return;
         }
+        // Defensive re-check: the warp path already rejected these before charging (so a charge is
+        // never live here); the home path (never charged) relies on them. Refund on any charged abort
+        // upholds the invariant that money is destroyed on no path.
         if (session.warmupTask() != null) {
+            refundIfCharged(player, charged, cost);
             messages.to(player, Text.ALREADY_WARMING);
             return;
         }
@@ -155,9 +216,12 @@ public final class TeleportSaga implements Travel {
         }
         messages.to(player, warmingKey, warpName == null ? "" : warpName);
         Warmup warmup = new Warmup(player, session, dest, doneKey, failedKey, cost, charged);
+        // A scheduler retire (entity gone mid-countdown) fires onRetired; a session teardown
+        // (logout/kick) runs the armed abort. Both funnel into Warmup.refundAbort, which returns a
+        // charged warp's cost exactly once (findings #27/#36/#59).
         TaskHandle handle = scheduling.repeatOn(player, CHECK_PERIOD_TICKS, CHECK_PERIOD_TICKS,
                 warmup, warmup::onRetired);
-        session.setWarmupTask(handle);
+        session.armWarmup(handle, warmup::refundAbort);
     }
 
     /** One in-flight warmup, confined to the player's region thread (repeatOn re-enters there). */
@@ -175,6 +239,7 @@ public final class TeleportSaga implements Travel {
         private final int startY;
         private final int startZ;
         private int elapsedTicks;
+        private boolean settled;   // single-shot: the pre-teleport money outcome has been decided
 
         Warmup(Player player, PlayerSession session, Location dest, MessageKey doneKey,
                MessageKey failedKey, double cost, boolean charged) {
@@ -196,21 +261,37 @@ public final class TeleportSaga implements Travel {
         public void run() {
             long now = System.currentTimeMillis();
             if (combatTags.inCombat(session, now) || moved()) {
-                cancelWarmup();
+                settled = true;             // this path owns the refund (online-aware) below
+                session.completeWarmup();
                 refundIfCharged(player, charged, cost);
                 messages.to(player, Text.WARMUP_CANCELLED);
                 return;
             }
             elapsedTicks += CHECK_PERIOD_TICKS;
             if (elapsedTicks >= WARMUP_TICKS) {
-                cancelWarmup();
+                settled = true;             // teleport takes ownership; finish() refunds only on failure
+                session.completeWarmup();
                 teleport(player, dest, doneKey, failedKey, charged, cost);
             }
         }
 
-        /** The entity left before the warmup finished: refund (offline) and drop the task. */
+        /** The scheduler retired the entity mid-countdown: drop the session task and refund (once). */
         void onRetired() {
-            clearHandle();
+            session.completeWarmup();
+            refundAbort();
+        }
+
+        /**
+         * Idempotent offline-safe refund of a charged warp — the abort hook armed on the session and
+         * the {@link #onRetired} path both call it, so a retire and a teardown firing together refund
+         * at most once. A no-op once the money outcome has already been settled (teleport, move/combat
+         * cancel, or a prior abort).
+         */
+        void refundAbort() {
+            if (settled) {
+                return;
+            }
+            settled = true;
             if (charged) {
                 vault.depositOffline(player.getUniqueId(), cost);
             }
@@ -220,14 +301,6 @@ public final class TeleportSaga implements Travel {
             Location cur = player.getLocation();
             return cur.getWorld() != startWorld || cur.getBlockX() != startX
                     || cur.getBlockY() != startY || cur.getBlockZ() != startZ;
-        }
-
-        private void cancelWarmup() {
-            session.cancelWarmup();
-        }
-
-        private void clearHandle() {
-            session.setWarmupTask(null);
         }
     }
 
@@ -310,8 +383,10 @@ public final class TeleportSaga implements Travel {
         static final MessageKey HOME_TELEPORTING = MessageKey.of("home.teleporting");
         static final MessageKey HOME_TELEPORTED = MessageKey.of("home.teleported");
         static final MessageKey HOME_TELEPORT_FAILED = MessageKey.of("home.teleport-failed");
+        static final MessageKey HOME_JAILED = MessageKey.of("home.jailed");
 
         static final MessageKey WARP_NOT_FOUND = MessageKey.of("warp.not-found");
+        static final MessageKey WARP_JAILED = MessageKey.of("warp.jailed");
         static final MessageKey WARP_TELEPORTING = MessageKey.of("warp.teleporting");
         static final MessageKey WARP_TELEPORTED = MessageKey.of("warp.teleported");
         static final MessageKey WARP_TELEPORT_FAILED = MessageKey.of("warp.teleport-failed");

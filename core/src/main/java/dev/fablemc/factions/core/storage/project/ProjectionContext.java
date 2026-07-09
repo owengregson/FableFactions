@@ -87,6 +87,11 @@ public final class ProjectionContext {
         factionIdByHandle.put(handle, factionId.toString());
     }
 
+    /** Drops every handle→id seed (crash-recovery reseed after a synchronous tail flush, finding #2). */
+    public void clearFactions() {
+        factionIdByHandle.clear();
+    }
+
     public SqlDialect dialect() {
         return dialect;
     }

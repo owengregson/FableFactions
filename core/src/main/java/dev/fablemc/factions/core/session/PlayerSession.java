@@ -36,6 +36,7 @@ public final class PlayerSession {
     private long combatTagUntil;   // epoch millis; 0 = not combat-tagged
     private long flyGraceUntil;    // epoch millis; fly grace window after leaving own territory
     private TaskHandle warmupTask; // active teleport/warp warmup countdown, or null
+    private Runnable warmupAbort;  // offline-safe refund, run iff a paid warmup is torn down early
     private Object guiSession;     // Wave-4 GUI view handle (opaque here), or null
 
     PlayerSession(UUID playerId, Player player) {
@@ -119,18 +120,51 @@ public final class PlayerSession {
         return warmupTask;
     }
 
-    /** Sets (or replaces) the active warmup task; cancels any prior one first. */
-    public void setWarmupTask(TaskHandle handle) {
-        cancelWarmup();
-        this.warmupTask = handle;
-    }
-
-    /** Cancels and clears any active warmup task. */
-    public void cancelWarmup() {
+    /**
+     * Arms a warmup: stores the countdown {@code handle} and an optional {@code abort} action — an
+     * offline-safe refund for a paid warp — that runs ONLY if the warmup is torn down before it
+     * completes (see {@link #abortWarmup()}). Any prior task is cancelled first, its abort dropped
+     * (not run): arming is only reached after the saga confirmed no warmup was already active.
+     */
+    public void armWarmup(TaskHandle handle, Runnable abort) {
         TaskHandle prior = this.warmupTask;
-        this.warmupTask = null;
+        this.warmupTask = handle;
+        this.warmupAbort = abort;
         if (prior != null && !prior.cancelled()) {
             prior.cancel();
+        }
+    }
+
+    /**
+     * Ends the warmup normally — the teleport fired, or the saga already settled the money itself on
+     * a move/combat cancel. Cancels the task and drops the abort hook WITHOUT refunding.
+     */
+    public void completeWarmup() {
+        this.warmupAbort = null;
+        TaskHandle handle = this.warmupTask;
+        this.warmupTask = null;
+        if (handle != null && !handle.cancelled()) {
+            handle.cancel();
+        }
+    }
+
+    /**
+     * Aborts an in-flight warmup because the entity retired mid-countdown or the session is being
+     * torn down (logout/kick): cancels the task and RUNS the abort refund exactly once, so a charged
+     * warp's cost is returned rather than eaten (findings #27/#36/#59). The abort hook is captured
+     * then cleared, so a second abort (a scheduler retire and a teardown both firing) never double-
+     * refunds. A no-op when no warmup is armed. Must run on the player's region thread (AM-14).
+     */
+    public void abortWarmup() {
+        Runnable abort = this.warmupAbort;
+        this.warmupAbort = null;
+        TaskHandle handle = this.warmupTask;
+        this.warmupTask = null;
+        if (handle != null && !handle.cancelled()) {
+            handle.cancel();
+        }
+        if (abort != null) {
+            abort.run();
         }
     }
 
@@ -148,11 +182,11 @@ public final class PlayerSession {
 
     /**
      * Lifecycle teardown, called by {@link SessionRegistry} when the player disconnects (Wave 4
-     * wires this on the region thread). Cancels the warmup and drops the GUI handle; the session
-     * is discarded afterward.
+     * wires this on the region thread). Aborts the warmup — refunding a charged warp whose teleport
+     * will now never fire — and drops the GUI handle; the session is discarded afterward.
      */
     void onClose() {
-        cancelWarmup();
+        abortWarmup();
         this.guiSession = null;
         this.lastChunkKey = NO_CHUNK;
         this.combatTagUntil = 0L;

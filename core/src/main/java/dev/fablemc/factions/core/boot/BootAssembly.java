@@ -37,7 +37,9 @@ import dev.fablemc.factions.core.pipeline.IntentBus;
 import dev.fablemc.factions.core.pipeline.ReduceStep;
 import dev.fablemc.factions.core.pipeline.SnapshotHub;
 import dev.fablemc.factions.core.pipeline.WriterThread;
+import dev.fablemc.factions.core.storage.EscrowReconciler;
 import dev.fablemc.factions.core.storage.StorageBoot;
+import dev.fablemc.factions.core.storage.StorageException;
 import dev.fablemc.factions.core.storage.StorageProjector;
 import dev.fablemc.factions.core.storage.load.BaselineLoader;
 import dev.fablemc.factions.core.text.EffectFeedback;
@@ -45,8 +47,11 @@ import dev.fablemc.factions.core.text.Messages;
 import dev.fablemc.factions.kernel.config.ConfigImage;
 import dev.fablemc.factions.kernel.config.StorageConfigView;
 import dev.fablemc.factions.kernel.effect.Effect;
+import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.state.EscrowTable;
 import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.kernel.state.KernelState;
+import dev.fablemc.factions.kernel.vocab.EscrowOutcome;
 import dev.fablemc.factions.platform.sched.Scheduling;
 
 /**
@@ -96,6 +101,9 @@ public final class BootAssembly {
      * @param storageOverride a {@link StorageConfigView} that supersedes {@code config.storage()}
      *                     (the test injects an {@code mem:} H2; production passes {@code null})
      * @param mysqlPassword the MySQL wallet password (kept out of the kernel image; empty for H2)
+     * @param configBaker  the AM-14 finalizer that bakes the container/interact material bitsets +
+     *                     world multipliers from the runtime {@code Material} registry (finding #7);
+     *                     {@code null} → identity (the headless test, which has no protection surface)
      */
     public record Deps(
             Logger logger,
@@ -111,7 +119,8 @@ public final class BootAssembly {
             Consumer<String> reportSink,
             @Nullable FeedbackRouter feedbackOverride,
             @Nullable StorageConfigView storageOverride,
-            @Nullable String mysqlPassword) {
+            @Nullable String mysqlPassword,
+            @Nullable UnaryOperator<ConfigImage> configBaker) {
     }
 
     private final Logger logger;
@@ -142,6 +151,7 @@ public final class BootAssembly {
     private final int memberCount;
     private final int claimCount;
     private final long journalSeqAtBoot;
+    private final EscrowTable recoveredEscrows;
 
     /**
      * Assembles the whole write plane in proposal-C §6.3 order and publishes snapshot v0. Does NOT
@@ -161,11 +171,20 @@ public final class BootAssembly {
         this.configFiles = new ConfigFiles(deps.dataFolder(), opener);
         configFiles.extractDefaults(issues);
         ConfigParser.Sources sources = configFiles.loadAll(issues);
-        this.config = ConfigParser.parse(sources, null, issues);   // world-blind at boot (AM-14)
+        ConfigImage parsed = ConfigParser.parse(sources, null, issues);   // world-blind at boot (AM-14)
+        // Finding #7: bake the container/interact material bitsets (+ world multipliers) from the
+        // RUNTIME Material registry so protection is not dead. The finalizer also re-bakes on reload.
+        UnaryOperator<ConfigImage> configBaker = deps.configBaker() != null
+                ? deps.configBaker() : UnaryOperator.identity();
+        this.config = configBaker.apply(parsed);
         report.line("config", "parsed (" + issues.size() + " issue(s))");
         for (String issue : issues) {
             report.line("config-issue", issue);
         }
+        report.line("baked", "protection materials: "
+                + countBits(config.baked().containerMaterials()) + " container, "
+                + countBits(config.baked().interactableMaterials())
+                + " interactable (runtime Material registry, AM-14)");
         List<String> catalogIssues = new ArrayList<>();
         this.catalog = CatalogLoader.load(opener, config.language().defaultLocale(), catalogIssues);
         for (String issue : catalogIssues) {
@@ -174,71 +193,136 @@ public final class BootAssembly {
         report.line("messages", catalog.localeCount() + " locale(s), default="
                 + config.language().defaultLocale());
 
-        // ── step 3: storage pool → advisory lock → migrate → baseline → journal replay ──────────
+        // ── step 3: storage pool → advisory lock → migrate (acquires the leak-prone resources) ───
         StorageConfigView view = deps.storageOverride() != null ? deps.storageOverride() : config.storage();
+        Runnable onFenceLost = () -> deps.onWriterFatal().onWriterFailed(new StorageException(
+                "advisory lock fence lost — another instance took over the database (AM-11)"));
         this.storage = StorageBoot.open(view, deps.mysqlPassword(), deps.dataFolder(), deps.instanceId(),
                 LOCK_TTL_MILLIS, deps.clock(), deps.worldIndex(), deps.worldResolver(), logger,
-                committedSeq -> { /* AM-17: CRITICAL-tier confirmation release lands in Wave 4 */ });
+                committedSeq -> { /* projector-commit ack (AM-17); journal fsync ack gates CRITICAL below */ },
+                onFenceLost);
         this.backendLabel = storage.backendLabel();
         report.line("storage", "backend=" + backendLabel + ", advisory lock acquired (AM-11)");
 
-        long checkpoint = storage.checkpoint();
-        BaselineLoader.Result baseline = storage.loadBaseline(config);
-        this.projector = storage.projector();
-        for (Map.Entry<Integer, UUID> entry : baseline.factionHandleToId().entrySet()) {
-            projector.seedFaction(entry.getKey(), entry.getValue());
+        // Finding #17: any failure AFTER the pool + lock are acquired must release BOTH — otherwise a
+        // re-enable refuses ("another live instance"). Wrap the rest of boot and close on failure.
+        EffectJournal journalLocal = null;
+        boolean booted = false;
+        try {
+            this.projector = storage.projector();
+            projector.setOnFatal(cause -> deps.onWriterFatal().onWriterFailed(cause));
+
+            long checkpoint = storage.checkpoint();
+            this.journalDir = new File(deps.dataFolder(), JOURNAL_SUBPATH).toPath();
+            journalLocal = new EffectJournal(journalDir, EffectJournal.DEFAULT_SEGMENT_BYTES,
+                    committedSeq -> { /* AM-17: fsync ack — release CRITICAL confirmations (Wave 4 consumer) */ });
+            this.journal = journalLocal;
+
+            // Finding #2: replay the journal tail, project it to the DB and FLUSH synchronously FIRST,
+            // then loadBaseline — so the authoritative in-memory state0 reflects DB + recovered tail
+            // (fsync-confirmed bank ops must not revert in memory). The projector daemon is not started
+            // here, so the tail flush is single-threaded on the boot thread.
+            List<Effect> tail = new ArrayList<>();
+            JournalReplay.ReplayResult replay = JournalReplay.replayFrom(journalDir, checkpoint, tail::add);
+            if (!tail.isEmpty()) {
+                // Seed the projector handle→id map from the pre-tail DB so the tail's faction handles
+                // resolve, project the tail, and flush it durably into the DB.
+                BaselineLoader.Result preTail = storage.loadBaseline(config);
+                for (Map.Entry<Integer, UUID> entry : preTail.factionHandleToId().entrySet()) {
+                    projector.seedFaction(entry.getKey(), entry.getValue());
+                }
+                projector.accept(tail, replay.lastSeq());
+                projector.flushNow();
+                projector.clearFactionSeeds();   // reseed authoritatively from the post-tail baseline
+                report.line("journal", "recovered " + replay.recordsReplayed() + " effect(s) from the tail "
+                        + "(seq " + (checkpoint + 1) + ".." + replay.lastSeq() + "); projected + flushed to "
+                        + "the DB before baseline load"
+                        + (replay.truncated() ? " (torn tail trimmed at the kill -9 boundary)" : ""));
+            } else {
+                report.line("journal", "clean — no tail beyond checkpoint"
+                        + (replay.truncated() ? " (torn tail trimmed)" : ""));
+            }
+
+            BaselineLoader.Result baseline = storage.loadBaseline(config);   // now reflects DB + tail
+            for (Map.Entry<Integer, UUID> entry : baseline.factionHandleToId().entrySet()) {
+                projector.seedFaction(entry.getKey(), entry.getValue());
+            }
+            this.factionCount = baseline.factionCount();
+            this.memberCount = baseline.memberCount();
+            this.claimCount = baseline.claimCount();
+            report.line("baseline", factionCount + " faction(s), " + memberCount + " member(s), "
+                    + claimCount + " claim(s); DB checkpoint=" + checkpoint);
+
+            long lastCommittedSeq = Math.max(checkpoint, replay.lastSeq());
+            this.journalSeqAtBoot = lastCommittedSeq;
+            long startSeq = lastCommittedSeq + 1;
+
+            KernelState state0 = baseline.state();
+            this.recoveredEscrows = state0.escrows();   // finding #3: reconciled after the writer starts
+            if (recoveredEscrows.size() > 0) {
+                report.line("escrows", recoveredEscrows.size() + " open escrow(s) recovered from "
+                        + "ff_escrows — AM-7 FAILED-settle reconciliation scheduled at start");
+            }
+
+            // ── step 4: snapshot v0 + pipeline (journal + projector + feedback + escrow) ─────────
+            this.hub = new SnapshotHub(new KernelSnapshot(state0));   // publish snapshot v0
+            report.line("snapshot", "v0 published (state version " + state0.version() + ")");
+
+            // Finding #3: wire the ff_escrows durable mirror now that the hub exists, and seed the set
+            // of already-persisted escrow ids so the first post-boot flush can delete settled ones.
+            projector.setEscrowSource(() -> hub.current().state().escrows());
+            List<Long> recoveredIds = new ArrayList<>();
+            recoveredEscrows.forEach(e -> recoveredIds.add(e.id()));
+            projector.seedOpenEscrows(recoveredIds);
+
+            this.messages = new Messages(catalog, hub, scheduling);
+            this.feedback = deps.feedbackOverride() != null
+                    ? deps.feedbackOverride()
+                    : new EffectFeedback(messages, hub, scheduling);
+            this.fanout = new EffectFanout(projector, feedback);
+
+            // The bus wakes the writer; break the construction cycle with a settable wake box.
+            AtomicReference<Runnable> wake = new AtomicReference<>(() -> { });
+            this.bus = new IntentBus(IntentBus.DEFAULT_CAPACITY, deps.clock(), deps.tick(),
+                    () -> wake.get().run());
+            this.writer = new WriterThread(bus, hub, state0, startSeq, ReduceStep.KERNEL, journal, fanout,
+                    deps.onWriterFatal(), deps.clock(), logger);
+            wake.set(writer::wake);
+
+            this.vault = new VaultAdapter();
+            this.escrow = new EscrowExecutor(vault, scheduling, bus);
+            fanout.subscribe(escrow::accept);   // external-effect sagas (Vault payouts/refunds, AM-7)
+            report.line("pipeline", "writer(fable-kernel) + journal(fsync off-writer) + "
+                    + "projector(fable-storage) + fan-out wired; escrow subscribed; startSeq=" + startSeq);
+
+            // Re-bake the material bitsets on /fa reload too (never swap in an empty image, finding #7).
+            this.reloads = new ReloadsImpl(configFiles, bus, scheduling, null, configBaker);
+            booted = true;
+        } finally {
+            if (!booted) {
+                if (journalLocal != null) {
+                    try {
+                        journalLocal.close();
+                    } catch (RuntimeException ignore) {
+                        // best effort — the pool/lock release below is what matters for re-enable
+                    }
+                }
+                try {
+                    storage.close();   // release the advisory lock + close the Hikari pool (finding #17)
+                } catch (RuntimeException ignore) {
+                    // best effort
+                }
+            }
         }
-        this.factionCount = baseline.factionCount();
-        this.memberCount = baseline.memberCount();
-        this.claimCount = baseline.claimCount();
-        report.line("baseline", factionCount + " faction(s), " + memberCount + " member(s), "
-                + claimCount + " claim(s); DB checkpoint=" + checkpoint);
+    }
 
-        this.journalDir = new File(deps.dataFolder(), JOURNAL_SUBPATH).toPath();
-        this.journal = new EffectJournal(journalDir);
-        List<Effect> tail = new ArrayList<>();
-        JournalReplay.ReplayResult replay = JournalReplay.replayFrom(journalDir, checkpoint, tail::add);
-        if (!tail.isEmpty()) {
-            // Crash recovery: the WAL held effects the projection had not yet persisted. Replay them
-            // into the projector so the DB is made whole (kills BUG-13/15 on the storage side).
-            projector.accept(tail, replay.lastSeq());
-            report.line("journal", "recovered " + replay.recordsReplayed() + " effect(s) from the tail "
-                    + "(seq " + (checkpoint + 1) + ".." + replay.lastSeq() + ") into the projection"
-                    + (replay.truncated() ? " (torn tail trimmed at the kill -9 boundary)" : ""));
-        } else {
-            report.line("journal", "clean — no tail beyond checkpoint"
-                    + (replay.truncated() ? " (torn tail trimmed)" : ""));
+    /** Population count of a bitset word array (boot-report material counts). */
+    private static int countBits(long[] words) {
+        int count = 0;
+        for (long word : words) {
+            count += Long.bitCount(word);
         }
-        long lastCommittedSeq = Math.max(checkpoint, replay.lastSeq());
-        this.journalSeqAtBoot = lastCommittedSeq;
-        long startSeq = lastCommittedSeq + 1;
-
-        KernelState state0 = baseline.state();
-
-        // ── step 4: snapshot v0 + pipeline (journal + projector + feedback + escrow) ─────────────
-        this.hub = new SnapshotHub(new KernelSnapshot(state0));   // publish snapshot v0
-        report.line("snapshot", "v0 published (state version " + state0.version() + ")");
-
-        this.messages = new Messages(catalog, hub, scheduling);
-        this.feedback = deps.feedbackOverride() != null
-                ? deps.feedbackOverride()
-                : new EffectFeedback(messages, hub, scheduling);
-        this.fanout = new EffectFanout(projector, feedback);
-
-        // The bus wakes the writer; break the construction cycle with a settable wake box.
-        AtomicReference<Runnable> wake = new AtomicReference<>(() -> { });
-        this.bus = new IntentBus(IntentBus.DEFAULT_CAPACITY, deps.clock(), deps.tick(), () -> wake.get().run());
-        this.writer = new WriterThread(bus, hub, state0, startSeq, ReduceStep.KERNEL, journal, fanout,
-                deps.onWriterFatal(), deps.clock(), logger);
-        wake.set(writer::wake);
-
-        this.vault = new VaultAdapter();
-        this.escrow = new EscrowExecutor(vault, scheduling, bus);
-        fanout.subscribe(escrow::accept);   // external-effect sagas (Vault payouts/refunds, AM-7)
-        report.line("pipeline", "writer(fable-kernel) + journal + projector(fable-storage) + fan-out "
-                + "wired; escrow subscribed; startSeq=" + startSeq);
-
-        this.reloads = new ReloadsImpl(configFiles, bus, scheduling, null, UnaryOperator.identity());
+        return count;
     }
 
     /** Starts the {@code fable-storage} projector and {@code fable-kernel} writer daemons. */
@@ -246,14 +330,29 @@ public final class BootAssembly {
         projector.start();
         writer.start();
         report.line("threads", "fable-storage + fable-kernel started");
+        // Finding #3: reconcile escrows recovered from ff_escrows now that the writer can reduce the
+        // compensating SettleEscrow(FAILED) intents (AM-7 bank re-credit / wallet refund).
+        if (recoveredEscrows.size() > 0) {
+            int reconciled = EscrowReconciler.reconcile(recoveredEscrows,
+                    id -> bus.submitSystem(new EconomyIntent.SettleEscrow(id, EscrowOutcome.FAILED)),
+                    logger);
+            report.line("escrows", "reconciled " + reconciled + " recovered escrow(s) via "
+                    + "SettleEscrow(FAILED) (AM-7)");
+        }
     }
 
     /**
-     * The ordered disable (proposal-C §6.4): reject new player intents → stop the writer → force-commit
-     * chest sessions → drain those final intents → fsync the journal → flush + checkpoint the projector
-     * → close the journal → release the advisory lock + close the pool. Every step is isolated in its
-     * own try/catch and logged; a timeout or failure at any step never loses committed data — the
-     * journal replays on the next boot.
+     * The ordered disable (proposal-C §6.4): reject new player intents → stop the writer (interrupt +
+     * bounded re-join if wedged) → force-commit chest sessions → drain those final intents ONLY if the
+     * writer is confirmed dead (never a second writer over live state, finding #6) → fsync the journal
+     * → flush + checkpoint the projector → close the journal → release the advisory lock + close the
+     * pool. Every step is isolated in its own try/catch and logged; a timeout or failure at any step
+     * never loses committed data — the journal replays on the next boot.
+     *
+     * <p>The {@code chestForceCommit} hook is the cross-agent seam for
+     * {@code ChestSessions.commitAndCloseAll()} (currently {@code forceCommitAll()} via
+     * {@link FeatureReconciler#forceCommitChests()}): it runs AFTER the writer stops and BEFORE storage
+     * stops, so the final drain picks up its {@code CommitChestContents} intents.
      *
      * @param chestForceCommit force-commits open chest sessions onto the system lane (a no-op if the
      *                         feature is not wired); run after the writer stops so the final drain sees it
@@ -262,7 +361,7 @@ public final class BootAssembly {
         step("reject-new-intents", bus::beginShutdown);
         step("writer-drain-and-stop", writer::shutdown);
         step("chest-force-commit", chestForceCommit);
-        step("final-intent-drain", writer::drainRemaining);
+        step("final-intent-drain", writer::drainRemaining);   // self-guards on writer.isStopped() (finding #6)
         step("journal-final-fsync", journal::fsyncBarrier);
         step("projector-flush-and-checkpoint", projector::shutdown);
         step("journal-close", journal::close);

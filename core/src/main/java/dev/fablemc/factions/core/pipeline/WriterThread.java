@@ -55,6 +55,12 @@ public final class WriterThread {
     /** Circuit-breaker window: a repeat same-type failure within this trips the breaker (AM-9). */
     public static final long BREAKER_WINDOW_MS = 60_000L;
 
+    /** Ordered-shutdown join budget before the writer daemon is interrupted (finding #6). */
+    public static final long JOIN_MILLIS = 5_000L;
+
+    /** Follow-up join budget after an interrupt before the writer is declared wedged. */
+    public static final long INTERRUPT_JOIN_MILLIS = 2_000L;
+
     private final IntentBus bus;
     private final SnapshotHub hub;
     private final ReduceStep reduce;
@@ -112,28 +118,59 @@ public final class WriterThread {
     /**
      * Drains and reduces every remaining queued intent on the CALLING thread until both lanes are
      * empty (ordered shutdown, proposal-C §6.4). This must be called ONLY after {@link #shutdown()}
-     * has joined the writer daemon — the writer is then dead, so state is single-thread-confined
-     * again and it is safe to reduce/publish/journal from the shutdown thread. Used to drain the
-     * final {@code CommitChestContents} intents enqueued by {@code ChestSessions.forceCommitAll}
-     * after the daemon has stopped, so no committed intent is lost at disable.
+     * has joined the writer daemon AND {@link #isStopped()} confirms it is dead — the writer is then
+     * dead, so state is single-thread-confined again and it is safe to reduce/publish/journal from
+     * the shutdown thread. Draining while the daemon is still alive would put two writers over the
+     * unsynchronized {@link KernelState} — the caller MUST gate on {@link #isStopped()} (finding #6).
+     * Used to drain the final {@code CommitChestContents} intents enqueued by
+     * {@code ChestSessions.forceCommitAll} after the daemon has stopped, so no committed intent is lost.
      */
     public void drainRemaining() {
+        if (!isStopped()) {
+            // Refuse to become a second concurrent writer — the wedged daemon still owns the state.
+            logger.log(Level.SEVERE, "final drain skipped: the writer daemon did not stop, so draining "
+                    + "on the disable thread would corrupt state with two writers; the journal replays "
+                    + "any un-drained intents on the next boot (finding #6)");
+            return;
+        }
         while (drainAndProcess() > 0) {
             // keep draining both lanes until empty
         }
     }
 
-    /** Stops the writer after the in-flight batch, draining nothing further; joins briefly. */
+    /** {@code true} once the writer daemon has terminated (or was never started). */
+    public boolean isStopped() {
+        Thread t = thread;
+        return t == null || !t.isAlive();
+    }
+
+    /**
+     * Stops the writer after the in-flight batch, draining nothing further. Joins for {@value
+     * #JOIN_MILLIS}ms; if the daemon is wedged (a pathological reduce step) it is interrupted and
+     * re-joined for {@value #INTERRUPT_JOIN_MILLIS}ms. If it STILL will not die it is left alone and
+     * logged loudly — the ordered shutdown must not drain on top of a live writer (finding #6).
+     */
     public void shutdown() {
         running = false;
         wake();
         Thread t = thread;
-        if (t != null) {
-            try {
-                t.join(5_000L);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
+        if (t == null) {
+            return;
+        }
+        try {
+            t.join(JOIN_MILLIS);
+            if (t.isAlive()) {
+                logger.log(Level.WARNING, "writer did not stop within " + JOIN_MILLIS
+                        + "ms — interrupting");
+                t.interrupt();
+                t.join(INTERRUPT_JOIN_MILLIS);
             }
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        if (t.isAlive()) {
+            logger.log(Level.SEVERE, "writer thread is wedged and would not stop after interrupt; the "
+                    + "final drain will be skipped to avoid dual writers (finding #6)");
         }
     }
 

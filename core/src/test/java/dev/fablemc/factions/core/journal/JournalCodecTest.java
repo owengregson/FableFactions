@@ -168,6 +168,7 @@ final class JournalCodecTest {
         l.add(new SessionEffect.InboxDelivered(s, ORIGIN, U1, ids));
         l.add(new AuditEffect.AuditRecorded(s, ORIGIN, 3, U1, FactionAuditAction.CLAIM, "detail"));
         l.add(new SystemEffect.ConfigSwapped(s, ORIGIN, "diff"));
+        l.add(new SystemEffect.AggregateDriftDetected(s, ORIGIN, 3, "landCount", 7, 5));
         l.add(new FeedbackEffect.Notify(s, ORIGIN, U1, key, args));
         l.add(new FeedbackEffect.NotifyFaction(s, ORIGIN, 3, NotifyPredicate.MEMBERS_ALL, key, args));
         l.add(new FeedbackEffect.Broadcast(s, ORIGIN, BroadcastScope.SERVER, key, args));

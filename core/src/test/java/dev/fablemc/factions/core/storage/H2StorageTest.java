@@ -84,7 +84,7 @@ final class H2StorageTest {
         AtomicLong ackedSeq = new AtomicLong(Long.MIN_VALUE);
         StorageProjector projector = new StorageProjector(ds, H2Dialect.INSTANCE,
                 worldIdx -> worldIdx == 0 ? "world" : null, () -> 1_000L,
-                committedSeq -> ackedSeq.set(committedSeq));
+                committedSeq -> ackedSeq.set(committedSeq), java.util.logging.Logger.getAnonymousLogger());
 
         Origin origin = Origin.player(new UUID(7, 7));
         UUID factionId = new UUID(100, 200);
@@ -155,6 +155,35 @@ final class H2StorageTest {
                 () -> now);
         assertNotNull(lock3, "the released lock can be re-acquired");
         lock3.close();
+    }
+
+    @Test
+    void advisoryLockHeartbeatDetectsTakeoverAndFiresFenceLost() throws SQLException {
+        String mem = "fence_" + UUID.randomUUID().toString().replace('-', '_');
+        DataSource ds1 = h2(mem);
+        DataSource ds2 = h2(mem);
+        try (Connection c = ds1.getConnection()) {
+            SchemaMigrator.migrate(c);
+        }
+        java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000_000L);
+        java.util.concurrent.atomic.AtomicBoolean fenceLost = new java.util.concurrent.atomic.AtomicBoolean();
+
+        // owner1 acquires a 5s fence; owner1 is told to flag if it loses the fence (finding #4).
+        AdvisoryLock lock1 = AdvisoryLock.tryAcquire(ds1, H2Dialect.INSTANCE, mem, new UUID(1, 1),
+                5_000L, now::get, () -> fenceLost.set(true));
+        assertNotNull(lock1, "owner1 acquires the fence");
+
+        // Time passes beyond owner1's expiry; owner2 legitimately takes over the stale lock.
+        now.addAndGet(10_000L);
+        AdvisoryLock lock2 = AdvisoryLock.tryAcquire(ds2, H2Dialect.INSTANCE, mem, new UUID(2, 2),
+                60_000L, now::get, AdvisoryLock.IGNORE_FENCE_LOSS);
+        assertNotNull(lock2, "owner2 takes over after owner1's fence expired");
+
+        // owner1's next heartbeat discovers it no longer owns the fence → loud fence-loss signal.
+        org.junit.jupiter.api.Assertions.assertThrows(StorageException.class, lock1::heartbeat,
+                "a taken-over heartbeat must fail loudly, not silently keep writing");
+        assertTrue(fenceLost.get(), "the fence-lost callback fired so the plugin can disable");
+        lock2.close();
     }
 
     @Test

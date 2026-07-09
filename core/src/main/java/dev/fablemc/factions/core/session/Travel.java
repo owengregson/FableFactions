@@ -32,4 +32,12 @@ public interface Travel {
      * the message layer.
      */
     void beginWarp(Player player, String warpName, String password);
+
+    /**
+     * Whether {@code player} is currently combat-tagged — the read {@code /f fly} consults before
+     * enabling flight so a player cannot gain flight to escape a fight (finding #30). {@code false}
+     * when the player has no live session or combat tagging is disabled. Call on the player's region
+     * thread (reads the confined {@link PlayerSession}, AM-14).
+     */
+    boolean inCombat(Player player);
 }

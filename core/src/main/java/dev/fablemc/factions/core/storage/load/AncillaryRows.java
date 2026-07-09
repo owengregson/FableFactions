@@ -12,13 +12,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
 
+import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.state.ChestRef;
 import dev.fablemc.factions.kernel.state.ChestTable;
+import dev.fablemc.factions.kernel.state.EscrowTable;
 import dev.fablemc.factions.kernel.state.InviteTable;
 import dev.fablemc.factions.kernel.state.MergeTable;
 import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.Warp;
 import dev.fablemc.factions.kernel.state.WarpTable;
+import dev.fablemc.factions.kernel.vocab.EscrowKind;
 
 /**
  * Reads the ancillary FableFactions tables into their kernel structures: ranks, warps, team chests,
@@ -120,6 +123,39 @@ final class AncillaryRows {
                 table = table.add(new InviteTable.Invite(inviteSeq++, ordinal,
                         LoadSupport.parseUuid(rs.getString("inviter_id")), invitee,
                         rs.getLong("created_at")));
+            }
+        }
+        return table;
+    }
+
+    /**
+     * Reads still-{@code OPEN} rows of {@code ff_escrows} back into an {@link EscrowTable} so boot can
+     * reconcile the durable escrow sagas (AM-7, finding #3). A row's faction is resolved to its
+     * generation-0 handle via {@code ordinalByFactionId}; an unknown/disbanded faction yields
+     * {@link FactionHandle#WILDERNESS}, which the FAILED-settle reducer treats as "refund the wallet".
+     * A row with an unparseable {@code kind} is skipped (never crash boot on a poisoned control row).
+     */
+    static EscrowTable readEscrows(Connection conn, Map<String, Integer> ordinalByFactionId)
+            throws SQLException {
+        EscrowTable table = EscrowTable.empty();
+        String sql = "SELECT `id`,`kind`,`player_uuid`,`faction_id`,`amount`,`created_at` "
+                + "FROM `ff_escrows` WHERE `status`='OPEN'";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                EscrowKind kind;
+                try {
+                    kind = EscrowKind.fromCode(rs.getInt("kind"));
+                } catch (IllegalArgumentException poisoned) {
+                    continue;
+                }
+                String factionId = rs.getString("faction_id");
+                Integer ordinal = factionId == null ? null : ordinalByFactionId.get(factionId);
+                int factionOrdinal = ordinal == null ? -1 : ordinal;
+                int factionHandle = ordinal == null
+                        ? FactionHandle.WILDERNESS : FactionHandle.handle(0, factionOrdinal);
+                table = table.open(new EscrowTable.Escrow(rs.getLong("id"), kind,
+                        LoadSupport.parseUuid(rs.getString("player_uuid")), factionOrdinal, factionHandle,
+                        rs.getDouble("amount"), rs.getLong("created_at")));
             }
         }
         return table;

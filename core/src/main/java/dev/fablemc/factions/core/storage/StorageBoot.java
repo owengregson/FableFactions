@@ -81,11 +81,13 @@ public final class StorageBoot implements AutoCloseable {
      * @param worldResolver worldIdx → world name (AM-15), used by the projector
      * @param log           the boot logger (baseline progress)
      * @param ack           the per-flush checkpoint ack (AM-17 CRITICAL-tier release), may be a no-op
+     * @param onFenceLost   fired if the advisory-lock heartbeat later detects a takeover / dropped
+     *                      lock connection (AM-11 fencing, finding #4) — disable the plugin loudly
      */
     public static StorageBoot open(StorageConfigView view, String mysqlPassword, File dataFolder,
                                    UUID owner, long lockTtlMillis, LongSupplier clock,
                                    ToIntFunction<String> worldIndex, IntFunction<String> worldResolver,
-                                   Logger log, StorageProjector.FlushListener ack) {
+                                   Logger log, StorageProjector.FlushListener ack, Runnable onFenceLost) {
         Objects.requireNonNull(view, "view");
         Objects.requireNonNull(dataFolder, "dataFolder");
         boolean mysql = MySqlDialect.NAME.equalsIgnoreCase(view.type());
@@ -94,24 +96,38 @@ public final class StorageBoot implements AutoCloseable {
         String dbKey = mysql ? view.mysqlDatabase() : view.h2File();
 
         HikariDataSource ds = buildPool(view, dialect, mysqlPassword, dataFolder, mysql);
+        AdvisoryLock lock = null;
         try {
             try (Connection conn = ds.getConnection()) {
                 SchemaMigrator.migrate(conn);
             }
-            AdvisoryLock lock = AdvisoryLock.tryAcquire(ds, dialect, dbKey, owner, lockTtlMillis, clock);
+            lock = AdvisoryLock.tryAcquire(ds, dialect, dbKey, owner, lockTtlMillis, clock, onFenceLost);
             if (lock == null) {
                 throw new StorageException("another live instance already holds the FableFactions "
                         + "advisory lock for '" + dbKey + "' — refusing to boot read-write (AM-11)");
             }
-            StorageProjector projector = new StorageProjector(ds, dialect, worldResolver, clock, ack);
+            StorageProjector projector = new StorageProjector(ds, dialect, worldResolver, clock, ack, log);
             BaselineLoader loader = new BaselineLoader(ds, worldIndex, log);
             return new StorageBoot(ds, dialect, label, lock, projector, loader);
         } catch (SQLException ex) {
+            releaseLock(lock);
             ds.close();
             throw new StorageException("storage boot failed", ex);
         } catch (RuntimeException ex) {
+            releaseLock(lock);   // finding #17: a post-lock failure must release the lock, not leak it
             ds.close();
             throw ex;
+        }
+    }
+
+    /** Best-effort release of a partially-acquired lock during a failed {@link #open}. */
+    private static void releaseLock(AdvisoryLock lock) {
+        if (lock != null) {
+            try {
+                lock.close();
+            } catch (RuntimeException ignored) {
+                // pool close below drops the connection; H2 fence expiry recovers a leaked row
+            }
         }
     }
 

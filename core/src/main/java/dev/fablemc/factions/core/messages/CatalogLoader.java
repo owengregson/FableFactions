@@ -35,9 +35,14 @@ import dev.fablemc.factions.kernel.msg.MessageKey;
  */
 public final class CatalogLoader {
 
-    /** The shipped locale tags, in interned-index order (index 0 = {@code en}). */
+    /**
+     * The shipped locale tags, in interned-index order (index 0 = {@code en}). English only for
+     * now: the translations are not yet maintainable, so they were removed rather than shipped
+     * stale — every locale request resolves to {@code en} via the waterfall. Re-add a tag here (and
+     * its {@code messages_<tag>.yml}) once a bundle is translated and kept in parity with {@code en}.
+     */
     public static final String[] SHIPPED_LOCALES = {
-            "en", "de", "es", "fr", "ja", "pt-BR", "ru", "zh"
+            "en"
     };
 
     private static final String RESOURCE_PREFIX = "messages/messages_";

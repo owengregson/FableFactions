@@ -121,11 +121,17 @@ public final class FableFactionsPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
         });
 
+        // Finding #7: bake the container/interact material bitsets (+ world multipliers) from the
+        // RUNTIME Material registry at boot and on /fa reload. This is the ONLY Bukkit-Material seam
+        // reaching the write plane; BootAssembly stays server-API-free (headless boot test).
+        java.util.function.UnaryOperator<dev.fablemc.factions.kernel.config.ConfigImage> configBaker =
+                MaterialBaking.finalizer(worldIndex);
+
         // steps 1 + 3 + 4: config → storage(+lock) → baseline → journal replay → snapshot v0 → pipeline.
         BootAssembly.Deps deps = new BootAssembly.Deps(
                 getLogger(), dataFolder, this::getResource, System::currentTimeMillis, tick::get,
                 scheduling, worldIndex, worldResolver, UUID.randomUUID(), onWriterFatal,
-                line -> getLogger().info(line), null, null, readMysqlPassword(dataFolder));
+                line -> getLogger().info(line), null, null, readMysqlPassword(dataFolder), configBaker);
         this.assembly = new BootAssembly(deps);
         assembly.start();
 

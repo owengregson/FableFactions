@@ -124,6 +124,7 @@ public enum EffectTag {
     // ── audit / system (0x0C00) ─────────────────────────────────────────────────────────────
     AUDIT_RECORDED(0x0C01, AuditEffect.AuditRecorded.class),
     CONFIG_SWAPPED(0x0C02, SystemEffect.ConfigSwapped.class),
+    AGGREGATE_DRIFT_DETECTED(0x0C03, SystemEffect.AggregateDriftDetected.class),
 
     // ── feedback (0x0D00) ───────────────────────────────────────────────────────────────────
     NOTIFY(0x0D01, FeedbackEffect.Notify.class),

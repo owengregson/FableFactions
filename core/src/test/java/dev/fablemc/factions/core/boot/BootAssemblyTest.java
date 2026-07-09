@@ -79,7 +79,7 @@ final class BootAssemblyTest {
                     () -> 1_000L, () -> 0, new FakeScheduling(),
                     name -> "world".equals(name) ? 0 : -1, idx -> idx == 0 ? "world" : null,
                     new UUID(9, 9), FailureHandler.IGNORE, report::add,
-                    FeedbackRouter.NOOP, memView, "");
+                    FeedbackRouter.NOOP, memView, "", null);   // configBaker null → headless (empty bitsets)
 
             BootAssembly boot = new BootAssembly(deps);
 

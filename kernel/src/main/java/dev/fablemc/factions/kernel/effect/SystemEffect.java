@@ -11,9 +11,25 @@ import dev.fablemc.factions.kernel.intent.Origin;
  * See {@link Effect} for the hierarchy contract.
  */
 public sealed interface SystemEffect extends Effect
-        permits SystemEffect.ConfigSwapped, SystemEffect.ContinuationRequested {
+        permits SystemEffect.ConfigSwapped, SystemEffect.ContinuationRequested,
+        SystemEffect.AggregateDriftDetected {
 
     record ConfigSwapped(long seq, Origin origin, String diffSummary) implements SystemEffect {
+    }
+
+    /**
+     * A drift-warning diagnostic emitted by the AM-4 {@code ReconcileSweep} when a faction's
+     * stored incremental aggregate ({@code aggregate}, e.g. {@code "landCount"}) disagreed with a
+     * fresh recompute from ground truth (the claim atlas): {@code stored} was found, {@code
+     * recomputed} is the truth. Drift is always a reducer-bug signal — never silent — so {@code
+     * :core} fans this out at <b>WARN</b>. The sweep has already corrected the stored value (and
+     * the reverse claim index) in the same step; this record is the loud, journaled audit trail.
+     *
+     * <p>Unlike {@link ContinuationRequested} this is a normal journaled effect: it carries a
+     * persistable diagnostic and MUST be tagged in the journal codec (SYSTEM range).
+     */
+    record AggregateDriftDetected(long seq, Origin origin, int faction, String aggregate,
+                                  int stored, int recomputed) implements SystemEffect {
     }
 
     /**

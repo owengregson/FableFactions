@@ -11,15 +11,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * The viewer-refcount / readiness state machine of {@link ChestSessions.LiveChest} — the
+ * The viewer-refcount / readiness / retire state machine of {@link ChestSessions.LiveChest} — the
  * Bukkit-free core of the shared-inventory model (one live inventory per {@code (faction, chest)}
  * with a refcount that force-commits and evicts on the last close). Headless: the inventory field
  * stays {@code null}.
  */
 class ChestSessionsTest {
 
+    private static final long NONCE = 1234L;
+
     private static ChestSessions.LiveChest live(int faction, String name) {
-        return new ChestSessions.LiveChest(new ChestSessions.ChestKey(faction, name));
+        return new ChestSessions.LiveChest(new ChestSessions.ChestKey(faction, name), NONCE);
     }
 
     @Test
@@ -60,9 +62,41 @@ class ChestSessionsTest {
     void nonceIsStablePerLiveChest() {
         ChestSessions.LiveChest chest = live(2, "vault");
         long nonce = chest.nonce();
+        assertEquals(NONCE, nonce);
         chest.addViewer();
         chest.ready(null, UUID.randomUUID());
         assertEquals(nonce, chest.nonce());
+    }
+
+    @Test
+    void readyAsOwnerMakesTheCreatorTheSoleFirstViewer() {
+        ChestSessions.LiveChest chest = live(2, "vault");
+        UUID owner = UUID.randomUUID();
+
+        chest.readyAsOwner(null, owner);
+
+        assertTrue(chest.isReady());
+        assertSame(owner, chest.owner());
+        assertEquals(1, chest.viewers());
+        assertTrue(chest.committable());
+    }
+
+    @Test
+    void committableRequiresReadyAndAViewer() {
+        ChestSessions.LiveChest chest = live(2, "vault");
+        assertFalse(chest.committable(), "not ready, no viewers");
+        chest.ready(null, UUID.randomUUID());
+        assertFalse(chest.committable(), "ready but zero viewers");
+        chest.addViewer();
+        assertTrue(chest.committable());
+    }
+
+    @Test
+    void retireLatchesAndBlocksReuse() {
+        ChestSessions.LiveChest chest = live(2, "vault");
+        assertFalse(chest.isRetired());
+        chest.retire();
+        assertTrue(chest.isRetired());
     }
 
     @Test

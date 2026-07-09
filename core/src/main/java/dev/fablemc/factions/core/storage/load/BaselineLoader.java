@@ -14,6 +14,7 @@ import javax.sql.DataSource;
 import dev.fablemc.factions.kernel.config.ConfigImage;
 import dev.fablemc.factions.kernel.state.ChestTable;
 import dev.fablemc.factions.kernel.state.ClaimAtlas;
+import dev.fablemc.factions.kernel.state.EscrowTable;
 import dev.fablemc.factions.kernel.state.FactionClaimList;
 import dev.fablemc.factions.kernel.state.InviteTable;
 import dev.fablemc.factions.kernel.state.KernelState;
@@ -56,6 +57,30 @@ public final class BaselineLoader {
                          int factionCount, int memberCount, int claimCount) {
     }
 
+    /**
+     * Loudly reports claims in worlds not loaded at boot (finding #23). They are inactive (not in the
+     * atlas) until their world loads, but their {@code board} rows survive — so they are recoverable
+     * rather than silently lost/re-claimable. This turns a silent data hazard into a visible one.
+     */
+    private void warnDeferredWorlds(Map<String, Integer> deferredByWorld) {
+        if (deferredByWorld.isEmpty()) {
+            return;
+        }
+        int total = 0;
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Integer> e : deferredByWorld.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(e.getKey()).append('=').append(e.getValue());
+            total += e.getValue();
+        }
+        log.warning("[baseline] " + total + " claim(s) belong to world(s) not loaded at boot ["
+                + sb + "] — they are INACTIVE (unprotected) until those worlds load; their board rows "
+                + "are retained (not dropped). Re-run the claim load for the world on WorldLoadEvent to "
+                + "activate them (AM-15).");
+    }
+
     /** Streams every table into a fresh {@link KernelState} carrying {@code config}. */
     public Result load(ConfigImage config) throws SQLException {
         Objects.requireNonNull(config, "config");
@@ -74,8 +99,10 @@ public final class BaselineLoader {
                     AncillaryRows.readRanks(conn, ordinalByFactionId, progress);
             ClaimAtlas.Builder atlas = new ClaimAtlas.Builder();
             Map<Integer, FactionClaimList> claimsByOrdinal = new HashMap<>();
+            Map<String, Integer> deferredByWorld = new HashMap<>();
             int claimCount = BoardRows.readBoard(conn, ordinalByFactionId, atlas, claimsByOrdinal,
-                    worldIndex, progress);
+                    worldIndex, deferredByWorld, progress);
+            warnDeferredWorlds(deferredByWorld);
 
             FactionRows.BuiltFactions built = FactionRows.buildFactions(factionRows, ordinalByFactionId,
                     ranksByOrdinal, claimsByOrdinal, worldIndex);
@@ -85,6 +112,7 @@ public final class BaselineLoader {
             ChestTable chests = AncillaryRows.readChests(conn, ordinalByFactionId, progress);
             InviteTable invites = AncillaryRows.readInvites(conn, ordinalByFactionId, progress);
             MergeTable merges = AncillaryRows.readMerges(conn, ordinalByFactionId, progress);
+            EscrowTable escrows = AncillaryRows.readEscrows(conn, ordinalByFactionId);
 
             KernelState state = KernelState.empty(config)
                     .withFactions(built.arena())
@@ -95,10 +123,12 @@ public final class BaselineLoader {
                     .withWarps(warps)
                     .withChests(chests)
                     .withInvites(invites)
-                    .withMergeRequests(merges);
+                    .withMergeRequests(merges)
+                    .withEscrows(escrows);
 
             log.info("[baseline] loaded " + factionRows.size() + " faction(s), "
-                    + players.memberCount() + " member(s), " + claimCount + " claim(s)");
+                    + players.memberCount() + " member(s), " + claimCount + " claim(s), "
+                    + escrows.size() + " open escrow(s)");
             return new Result(state, handleToId, factionRows.size(), players.memberCount(), claimCount);
         }
     }

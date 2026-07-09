@@ -3,12 +3,19 @@ package dev.fablemc.factions.core.journal;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 
 import dev.fablemc.factions.core.pipeline.EffectSink;
 import dev.fablemc.factions.kernel.effect.Effect;
@@ -20,18 +27,32 @@ import dev.fablemc.factions.kernel.effect.Effect;
  * {@code kill -9} loses at most the last unsynced batch, never a torn row — a partial or
  * corrupt tail record is rejected by {@link JournalReplay} at the clean prefix.
  *
- * <p><b>Owning thread(s):</b> the single writer thread ({@link #accept}) and boot; not
- * thread-safe. <b>Mutability:</b> owns a mutable {@link FileChannel} for the current segment.
- *
- * <p>Durability: {@link #accept} performs a group-commit {@code fsync} at the end of each batch;
- * {@link #fsyncBarrier()} forces an immediate {@code fsync} for the CRITICAL tier (AM-17,
- * used to gate user-facing confirmations for bank/escrow/chest/disband). Segments roll at
+ * <p><b>Durability &amp; the writer (AM-17, finding #8).</b> {@link #accept} performs only the
+ * (fast, buffered) record <em>writes</em> on the {@code fable-kernel} writer thread; the
+ * {@code fsync} that makes them durable runs on a dedicated {@code journal-sync} executor — the
+ * writer never blocks on {@code fsync}. Each completed {@code fsync} fires {@link FsyncAck} with the
+ * durable seq, the seam a CRITICAL-tier confirmation waits on before it is shown to the user
+ * (STATE-tier feedback releases immediately without waiting). {@link #fsyncBarrier()} forces an
+ * immediate synchronous {@code fsync} for the ordered shutdown drain. Segments roll at
  * {@code maxSegmentBytes} (64&nbsp;MB in production) keeping every record whole.
+ *
+ * <p><b>Owning thread(s):</b> {@link #accept}/roll on the single writer thread; the {@code fsync}
+ * on the {@code journal-sync} thread; {@link #fsyncBarrier()}/{@link #close()} on the boot/disable
+ * thread. Roll (close+open of the channel) and every {@code fsync} are serialized on
+ * {@link #syncLock} so an {@code fsync} can never race a segment close; normal record writes take no
+ * lock, so the writer is never blocked by an in-flight {@code fsync} except at the rare (per-64&nbsp;MB)
+ * roll boundary. <b>Mutability:</b> owns the current segment channel + the two seq watermarks.
  */
 public final class EffectJournal implements EffectSink, AutoCloseable {
 
     /** Production segment roll size (64&nbsp;MB). */
     public static final long DEFAULT_SEGMENT_BYTES = 64L * 1024 * 1024;
+
+    /** Fired on the {@code journal-sync} thread once records up to {@code durableSeq} are fsynced (AM-17). */
+    @FunctionalInterface
+    public interface FsyncAck {
+        void onFsynced(long durableSeq);
+    }
 
     // Segment file naming, shared with JournalReplay (the read side of this format).
     static final String SEGMENT_PREFIX = "seg-";
@@ -44,17 +65,30 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
 
     private final Path dir;
     private final long maxSegmentBytes;
+    private final FsyncAck ack;
+
+    private final ReentrantLock syncLock = new ReentrantLock();
+    private final ExecutorService syncExecutor;
+    private final AtomicBoolean syncScheduled = new AtomicBoolean(false);
+    private final AtomicLong writtenSeq = new AtomicLong(Long.MIN_VALUE);
+    private final AtomicLong syncedSeq = new AtomicLong(Long.MIN_VALUE);
 
     private int segmentIndex;
-    private FileChannel channel;
+    private volatile FileChannel channel;
     private long segmentBytes;
 
-    public EffectJournal(Path dir, long maxSegmentBytes) {
+    public EffectJournal(Path dir, long maxSegmentBytes, FsyncAck ack) {
         this.dir = Objects.requireNonNull(dir, "dir");
         if (maxSegmentBytes < 64) {
             throw new IllegalArgumentException("maxSegmentBytes too small");
         }
         this.maxSegmentBytes = maxSegmentBytes;
+        this.ack = ack;
+        this.syncExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "journal-sync");
+            t.setDaemon(true);
+            return t;
+        });
         try {
             Files.createDirectories(dir);
             this.segmentIndex = nextFreshIndex(dir);
@@ -64,8 +98,12 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
         }
     }
 
+    public EffectJournal(Path dir, long maxSegmentBytes) {
+        this(dir, maxSegmentBytes, null);
+    }
+
     public EffectJournal(Path dir) {
-        this(dir, DEFAULT_SEGMENT_BYTES);
+        this(dir, DEFAULT_SEGMENT_BYTES, null);
     }
 
     /** The path a segment file with the given index lives at (also used by replay). */
@@ -83,39 +121,109 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
         return segmentIndex;
     }
 
+    /** The highest seq durably fsynced so far, or {@link Long#MIN_VALUE} before the first sync. */
+    public long durableSeq() {
+        return syncedSeq.get();
+    }
+
     @Override
     public void accept(List<Effect> batch, long lastSeq) {
         if (batch == null || batch.isEmpty()) {
             return;
         }
+        // Records are WRITTEN on the writer thread (fast, buffered); the fsync is handed to the
+        // journal-sync executor so the writer never blocks on durability (AM-17, finding #8).
         try {
             for (int i = 0; i < batch.size(); i++) {
                 writeRecord(batch.get(i));
             }
-            channel.force(true);   // group-commit fsync per batch
         } catch (IOException ex) {
             throw new UncheckedIOException("journal append failed", ex);
         }
+        writtenSeq.set(lastSeq);
+        scheduleSync();
     }
 
-    /** Forces an immediate {@code fsync} — the CRITICAL-tier durability barrier (AM-17). */
-    public void fsyncBarrier() {
+    /** Coalescing hand-off: at most one pending sync task, which flushes to the latest written seq. */
+    private void scheduleSync() {
+        if (syncScheduled.compareAndSet(false, true)) {
+            try {
+                syncExecutor.execute(this::syncPending);
+            } catch (RuntimeException rejected) {
+                // Executor already shut down (close in progress): fold the sync inline so nothing is lost.
+                syncScheduled.set(false);
+                syncPending();
+            }
+        }
+    }
+
+    private void syncPending() {
+        syncScheduled.set(false);
+        long target = writtenSeq.get();
+        if (syncedSeq.get() >= target) {
+            return;
+        }
+        forceTo(target);
+    }
+
+    /** Forces the current segment and advances {@link #syncedSeq} to {@code target}, then acks. */
+    private void forceTo(long target) {
+        syncLock.lock();
         try {
-            channel.force(true);
+            FileChannel ch = channel;
+            if (ch != null && ch.isOpen()) {
+                ch.force(true);
+            }
+        } catch (ClosedChannelException rolled) {
+            // A roll closed this segment after forcing it; the current channel holds the rest. The
+            // next scheduled sync (or the roll's own force) covers target — safe to fall through.
         } catch (IOException ex) {
+            syncLock.unlock();
             throw new UncheckedIOException("journal fsync failed", ex);
         }
+        // advance the watermark only for what was actually flushed under the lock
+        long prev;
+        do {
+            prev = syncedSeq.get();
+            if (prev >= target) {
+                break;
+            }
+        } while (!syncedSeq.compareAndSet(prev, target));
+        syncLock.unlock();
+        if (ack != null) {
+            ack.onFsynced(target);
+        }
+    }
+
+    /**
+     * Forces an immediate synchronous {@code fsync} up to the last written seq — the CRITICAL-tier /
+     * ordered-shutdown durability barrier (AM-17). Runs on the CALLING thread (boot/disable), not the
+     * writer.
+     */
+    public void fsyncBarrier() {
+        forceTo(writtenSeq.get());
     }
 
     @Override
     public void close() {
+        // Stop accepting new async syncs, drain the pending one, then a final synchronous force+close.
+        syncExecutor.shutdown();
         try {
-            if (channel != null && channel.isOpen()) {
-                channel.force(true);
-                channel.close();
+            syncExecutor.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        syncLock.lock();
+        try {
+            FileChannel ch = channel;
+            if (ch != null && ch.isOpen()) {
+                ch.force(true);
+                ch.close();
             }
         } catch (IOException ex) {
             throw new UncheckedIOException("journal close failed", ex);
+        } finally {
+            syncLock.unlock();
         }
     }
 
@@ -143,17 +251,24 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
         rec.putInt(crc);
         rec.put(body);
         rec.flip();
+        FileChannel ch = channel;
         while (rec.hasRemaining()) {
-            channel.write(rec);
+            ch.write(rec);
         }
         segmentBytes += recordBytes;
     }
 
     private void roll() throws IOException {
-        channel.force(true);
-        channel.close();
-        segmentIndex++;
-        openSegment();
+        // Serialized against the journal-sync fsync so a segment is never closed mid-force.
+        syncLock.lock();
+        try {
+            channel.force(true);
+            channel.close();
+            segmentIndex++;
+            openSegment();
+        } finally {
+            syncLock.unlock();
+        }
     }
 
     private void openSegment() throws IOException {

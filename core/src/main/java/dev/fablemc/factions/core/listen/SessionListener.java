@@ -57,6 +57,9 @@ public final class SessionListener implements Listener {
         Player player = event.getPlayer();
         UUID id = player.getUniqueId();
         ctx.sessions().open(player);
+        // Re-arm a combat tag that was still ticking when the player logged out, so a relog can't
+        // be used to escape combat and immediately /f home (finding #28).
+        ctx.sessions().restoreCombatTag(id, System.currentTimeMillis());
         ctx.bus().submitSystem(new SessionIntent.PlayerConnected(id, player.getName(), null));
         KernelSnapshot snap = ctx.snapshots().current();
         int ord = snap.memberOrdinal(id);

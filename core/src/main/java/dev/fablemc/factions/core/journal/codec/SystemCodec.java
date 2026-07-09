@@ -33,6 +33,13 @@ public final class SystemCodec {
                 Wire.writeString(o, x.detail());
             }
             case CONFIG_SWAPPED -> Wire.writeString(o, ((SystemEffect.ConfigSwapped) e).diffSummary());
+            case AGGREGATE_DRIFT_DETECTED -> {
+                SystemEffect.AggregateDriftDetected x = (SystemEffect.AggregateDriftDetected) e;
+                o.writeInt(x.faction());
+                Wire.writeString(o, x.aggregate());
+                o.writeInt(x.stored());
+                o.writeInt(x.recomputed());
+            }
             default -> throw tag.outside(EffectTag.Domain.SYSTEM);
         }
     }
@@ -44,6 +51,9 @@ public final class SystemCodec {
                     new AuditEffect.AuditRecorded(seq, origin, in.readInt(), Wire.readUuid(in),
                             Wire.readAuditAction(in), Wire.readString(in));
             case CONFIG_SWAPPED -> new SystemEffect.ConfigSwapped(seq, origin, Wire.readString(in));
+            case AGGREGATE_DRIFT_DETECTED ->
+                    new SystemEffect.AggregateDriftDetected(seq, origin, in.readInt(), Wire.readString(in),
+                            in.readInt(), in.readInt());
             default -> throw tag.outside(EffectTag.Domain.SYSTEM);
         };
     }

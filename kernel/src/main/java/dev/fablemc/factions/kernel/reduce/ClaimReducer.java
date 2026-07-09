@@ -5,11 +5,13 @@ import java.util.UUID;
 import dev.fablemc.factions.kernel.effect.ClaimEffect;
 import dev.fablemc.factions.kernel.ids.FactionHandle;
 import dev.fablemc.factions.kernel.intent.ClaimIntent;
+import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.rules.ClaimRules;
 import dev.fablemc.factions.kernel.rules.FactionEdit;
 import dev.fablemc.factions.kernel.state.Faction;
 import dev.fablemc.factions.kernel.state.KernelState;
+import dev.fablemc.factions.kernel.state.Rank;
 import dev.fablemc.factions.kernel.state.ZoneStats;
 
 /**
@@ -102,6 +104,14 @@ final class ClaimReducer {
         if (f == null) {
             return;
         }
+        // Reduce-time re-validation (#42): reject if the actor is no longer a member of the
+        // faction. An unclaim queued while a member must NOT still execute after they were kicked;
+        // this mirrors the membership guard {@code claimChunks} already applies. Only the player
+        // path issues UnclaimChunks (admin unclaim uses AdminUnclaimChunks), so the check is
+        // unconditional, exactly as in {@code claimChunks}.
+        if (s.memberOfOrReject(c.player(), f.idx(), ReasonCode.NOT_IN_FACTION) < 0) {
+            return;
+        }
         int unclaimed = 0;
         ReasonCode firstErr = null;
         for (long key : c.keys()) {
@@ -160,11 +170,39 @@ final class ClaimReducer {
         if (f == null) {
             return;
         }
-        s.removeUpToPageClaims(f.idx());
-        Faction after = s.resolve(factionHandle);
-        if (after != null && after.landCount() > 0) {
+        // Reduce-time re-validation (#42): a player-issued unclaim-all queued before a kick/demote
+        // must NOT execute after it. Only the entry page carries the initiating player's origin;
+        // admin/console unclaim-all (a non-member actor, ADMIN/CONSOLE origin) and the SYSTEM-origin
+        // continuation pages intentionally bypass this gate (mirrors the command-layer
+        // {@code requireFaction} + {@code requireOwner} that fronts {@code /f unclaim all}).
+        if (s.origin.channel() == Origin.PLAYER && rejectUnclaimAllActor(s, f, actor)) {
+            return;
+        }
+        // Zero-progress termination (#42): continue only while a page actually removes claims.
+        // Keying the loop on landCount would spin forever if that aggregate ever drifted above the
+        // real atlas count; the removed count comes from the atlas scan, so it is drift-robust.
+        int removed = s.removeUpToPageClaims(f.idx());
+        if (removed > 0) {
             s.continuation(new ClaimIntent.UnclaimAllPage(factionHandle, 0, actor));
         }
+    }
+
+    /**
+     * Rejects a player-origin unclaim-all whose {@code actor} is no longer an owner-ranked member
+     * of {@code f}: emits {@code NOT_IN_FACTION} (kicked) or {@code MUST_BE_LEADER} (demoted) and
+     * returns {@code true}. Mirrors {@code CommandGuards.requireOwner}.
+     */
+    static boolean rejectUnclaimAllActor(ReduceSupport s, Faction f, UUID actor) {
+        int actorOrd = s.memberOfOrReject(actor, f.idx(), ReasonCode.NOT_IN_FACTION);
+        if (actorOrd < 0) {
+            return true;
+        }
+        Rank actorRank = s.rankOf(f, actorOrd);
+        if (actorRank == null || !actorRank.isOwner()) {
+            s.reject(ReasonCode.MUST_BE_LEADER);
+            return true;
+        }
+        return false;
     }
 
     static void zonePage(ReduceSupport s, int zoneOrdinal, int worldIdx, long[] keys, int cursor, UUID actor) {

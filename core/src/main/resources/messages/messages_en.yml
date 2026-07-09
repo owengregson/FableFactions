@@ -22,6 +22,7 @@ general:
   cancelled: "<yellow>Action cancelled."
   unknown-subcommand-detailed: "<red>Unknown command '<yellow>{input}</yellow>'. "
   help-hover: "<gray>Click to view all faction commands"
+  bad-option: "<red>Unknown option '<yellow>{option}</yellow>'."
 help:
   title: "<gold>Faction Commands"
   start-here: "<yellow>Getting started:"
@@ -79,6 +80,9 @@ invite:
   received-short: "<green>Invite: <yellow>{faction}</yellow>"
   accept-hover: "<green>Click to accept {faction}"
   decline-hover: "<red>Click to decline"
+  summary-entry: "<gray>- <yellow>{faction}</yellow> <gray>(from {inviter})"
+  revoked: "<yellow>Revoked the invite to <white>{player}</white>."
+  declined-all: "<yellow>Declined <white>{count}</white> pending invite(s)."
 claim:
   claimed: "<green>Claimed this chunk for <yellow>{faction}</yellow>."
   unclaimed: "<yellow>Unclaimed this chunk."
@@ -107,6 +111,8 @@ bank:
   insufficient-funds: "<red>Insufficient funds (balance: <green>{balance}</green>)."
   invalid-amount: "<red>Invalid amount."
   tax-charged: "<yellow>Bank tax of <gold>{amount}</gold> charged (balance: <green>{balance}</green>)."
+  history-header: "<gold>Bank history <gray>(page {page}):"
+  history-empty: "<gray>No bank history to show."
 home:
   set: "<green>Faction home set."
   teleporting: "<gray>Teleporting home..."
@@ -125,6 +131,10 @@ warp:
   limit-reached: "<red>Your faction has reached its warp limit ({max})."
   set-in-own-territory: "<red>You can only set warps inside your own territory."
   jailed: "<red>You cannot use warps while jailed."
+  cost-set: "<green>Warp <yellow>{name}</yellow> cost set to <gold>{cost}</gold>."
+  password-set: "<green>Password set for warp <yellow>{name}</yellow>."
+  password-cleared: "<yellow>Password cleared for warp <gold>{name}</gold>."
+  password-required: "<red>Warp <yellow>{name}</yellow> is password-protected; provide the password to travel."
 flag:
   list-header: "<gold>Flags for {faction}:"
   entry-on: "<gray>{flag}: <green>on</green> <dark_gray>{edit_note}"
@@ -135,6 +145,7 @@ flag:
   not-editable: "<red>The flag {flag} cannot be changed by players."
   officer-required: "<red>Only officers or above can change flags."
   admin-override: "<yellow>Admin override: {flag} on {faction}."
+  value-invalid: "<red>Invalid flag value. Use <yellow>on</yellow> or <yellow>off</yellow>."
 relation:
   set: "<green>Relation with {faction} set to {relation}."
   updated: "<green>Relation with {faction} is now {relation}."
@@ -145,6 +156,13 @@ relation:
   mutual-established: "<green>You are now {relation} with {faction}."
   mutual-established-target: "<green>{faction} is now {relation} with you."
   updated-by-other: "<yellow>{faction} set their relation with you to {relation}."
+relations:
+  list-header: "<gold>Relations:"
+  list-entry: "<gray>{faction}: <white>{relation} <dark_gray>({status})"
+  list-empty: "<gray>No relations to show."
+  announce: "<gray>Your faction is now <white>{relation}</white> with <yellow>{faction}</yellow>."
+  wishes-set: "<gray>You have relation wishes set; use <white>/f relation list</white> to view them."
+  wishes-none: "<gray>You have no relation wishes set."
 predefined:
   disabled: "<red>Predefined factions are disabled."
   unknown: "<red>Unknown predefined faction {faction}."
@@ -155,6 +173,7 @@ predefined:
   reload-success: "<green>Predefined factions reloaded."
   reload-failed: "<red>Failed to reload predefined factions."
   none: "<gray>No predefined factions are configured."
+  list: "<gray>Predefined factions: <white>{list}"
 power:
   too-low-raid: "<red>Your power is too low; your land can be raided."
   lost-on-death: "<red>You lost <gold>{amount}</gold> power."
@@ -183,6 +202,9 @@ power:
   admin-remove-success: "<green>Removed {delta} from {player} ({before} -> {after})."
   admin-reset-success: "<green>Reset {player} power {before} -> {after}."
   admin-freeze-success: "<green>{player} freeze state: {state}."
+  admin-invalid-amount: "<red>Invalid amount '<yellow>{value}</yellow>'."
+  admin-reason-required: "<red>A reason is required for this change."
+  admin-freeze-usage: "<red>Usage: /fa power freeze <player> [on|off]"
 raidable:
   became-raidable: "<red>⚠ Your faction is now raidable! Enemies can overclaim your land."
   no-longer-raidable: "<green>✔ Your faction is no longer raidable."
@@ -195,6 +217,26 @@ fly:
   enemy-nearby: "<red>An enemy is near; flight disabled."
 lwc:
   stale-protection-removed: "<yellow>A stale protection was removed."
+map:
+  header: "<gold>Map of <white>{world}</white> <gray>around <white>{x}<gray>, <white>{z}<gray>:"
+  row: "<white>{row}"
+  legend: "<gray>Legend: <yellow>+</yellow> you  <green>-</green> wilderness  <aqua>s</aqua> safe  <red>w</red> war  <gold>#</gold> yours  <white>=</white> other"
+  enabled: "<green>Territory map titles enabled."
+  disabled: "<yellow>Territory map titles disabled."
+motd:
+  header: "<gold>Message of the day:"
+  display: "<white>{motd}"
+  set: "<green>Faction MOTD updated."
+  cleared: "<yellow>Faction MOTD cleared."
+  none: "<gray>Your faction has no MOTD set."
+  too-long: "<red>That MOTD is too long."
+chest:
+  opened: "<green>Opened chest <yellow>{name}</yellow>."
+  none: "<gray>Your faction has no chests."
+  invalid-name: "<red>Invalid chest name."
+  limit-reached: "<red>Your faction has reached its chest limit ({max})."
+  list-header: "<gold>Faction chests:"
+  list-entry: "<gray>- <white>{name}"
 info:
   header: "<gold>=== {name} ==="
   leader: "<gray>Leader: <white>{leader}"
@@ -210,6 +252,14 @@ admin:
   bypass-enabled: "<green>Admin bypass enabled."
   bypass-disabled: "<yellow>Admin bypass disabled."
   reload: "<green>Configuration reloaded."
+  reload-warnings: "<yellow>Configuration reloaded with <red>{count}</red> warning(s); check the console."
+  audit-header: "<gold>Audit log for <yellow>{name}</yellow> <gray>(page {page}) <white>{filter}"
+  audit-entry: "<gray>{time} <white>{actor} <yellow>{action} <gray>{detail}"
+  audit-empty: "<gray>No audit entries to show."
+  audit-error: "<red>Could not load the audit log."
+  audit-unknown-action: "<red>Unknown audit action '<yellow>{action}</yellow>'. Valid: <gray>{valid}"
+  help-header: "<gold>Admin Commands"
+  help-entry: "<yellow>{usage} <gray>- <white>{description}"
 shield:
   set: "<green>War shield for {faction} set to {start}:00 UTC for {duration}h."
   cleared: "<yellow>War shield for {faction} cleared."
@@ -254,6 +304,9 @@ custom:
     friendly-fire-disabled: "<red>Friendly fire is disabled."
     pvp-safezone: "<red>PvP is disabled in the safe zone."
     pvp-territory: "<red>PvP is disabled in this territory."
+    no-build: "<red>You cannot build here."
+    no-container: "<red>You cannot use containers here."
+    no-interact: "<red>You cannot interact here."
   move:
     enter-claimed: "<gray>Entering {faction}'s territory."
     enter: "<gray>Entering {territory}."
@@ -268,10 +321,17 @@ custom:
     world-not-loaded: "<red>That warp's world is not loaded."
     set-protected: "<red>You can only set warps in your own territory."
     set-failed: "<red>Failed to set the warp."
+    cost-charged: "<yellow>Charged <gold>{cost}</gold> to warp to <yellow>{name}</yellow>."
+    cost-insufficient: "<red>You need <gold>{cost}</gold> to use this warp."
+    cost-no-economy: "<red>This warp has a cost, but no economy is available."
+    entry: "<gray>- <white>{name}"
+    password-status: "<gray>Warp <yellow>{name}</yellow> password: <white>{status}"
   home:
     set-protected: "<red>You can only set your home in your own territory."
     set: "<green>Home set."
     set-failed: "<red>Failed to set the home."
+    unset: "<yellow>Faction home unset."
+    unset-confirm: "<yellow>Run the command again to confirm unsetting your faction home."
   fly:
     disabled-global: "<red>Faction flight is disabled on this server."
     own-territory-required: "<red>You can only fly in your own territory."
@@ -293,12 +353,14 @@ custom:
     promoted: "<green>{name} was promoted."
     promote-failed: "<red>Failed to promote that member."
     kick-actor: "<green>You kicked {player}."
+    demoted: "<yellow>{name} was demoted."
   faction:
     disbanded: "<yellow>Your faction was disbanded."
     disband-failed: "<red>Failed to disband the faction."
     desc-too-long: "<red>Description too long (max 250 characters)."
     desc-updated: "<green>Faction description updated."
     desc-update-failed: "<red>Failed to update the description."
+    renamed: "<green>Faction renamed to <yellow>{name}</yellow>."
   list:
     separator: "<dark_gray><strikethrough>                              "
     none: "<gray>No factions found."
@@ -340,3 +402,18 @@ custom:
     delete-success: "<yellow>Deleted role {name}."
     assign-success: "<green>Assigned {role} to {player}."
     assign-failed: "<red>Failed to assign the role."
+  chest:
+    in-use: "<red>That chest is in use by someone else."
+    loading: "<gray>That chest is loading; try again in a moment."
+  claim:
+    auto-enabled: "<green>Auto-claim enabled; move to claim land as you walk."
+    auto-disabled: "<yellow>Auto-claim disabled."
+    auto-unclaim-enabled: "<green>Auto-unclaim enabled; move to unclaim land as you walk."
+    auto-unclaim-disabled: "<yellow>Auto-unclaim disabled."
+    unclaim-all-confirm: "<yellow>Run the command again to confirm unclaiming all of your land."
+  travel:
+    already-warming: "<red>You are already teleporting."
+    combat-blocked: "<red>You cannot do that while in combat."
+    warmup-cancelled: "<yellow>Teleport cancelled."
+  lwc:
+    stale-removed: "<yellow>A stale protection on your chest was removed."

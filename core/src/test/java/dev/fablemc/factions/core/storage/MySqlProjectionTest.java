@@ -103,7 +103,8 @@ final class MySqlProjectionTest {
 
         AtomicLong acked = new AtomicLong(Long.MIN_VALUE);
         StorageProjector projector = new StorageProjector(ds, MySqlDialect.INSTANCE,
-                worldIdx -> worldIdx == 0 ? "world" : null, () -> 1_000L, acked::set);
+                worldIdx -> worldIdx == 0 ? "world" : null, () -> 1_000L, acked::set,
+                java.util.logging.Logger.getAnonymousLogger());
 
         Origin origin = Origin.player(new UUID(5, 5));
         UUID factionId = new UUID(9, 9);

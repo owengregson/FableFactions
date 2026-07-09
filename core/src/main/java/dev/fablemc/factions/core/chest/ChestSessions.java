@@ -5,8 +5,10 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -42,14 +44,30 @@ import dev.fablemc.factions.platform.sched.TaskHandle;
  *
  * <p>On Folia (where a shared inventory cannot safely cross region threads) the engine runs in
  * <b>exclusive-open mode (D-13)</b>: a second opener of an already-open chest is refused, so the
- * live inventory is only ever touched by its single owner's region.
+ * live inventory is only ever touched by its single owner's region. The exclusive-open decision and
+ * every viewer/readiness transition are <b>atomic</b> (each {@link LiveChest} guards its own state
+ * with its monitor and eviction is done under the map's per-key lock), so two openers racing on
+ * different region threads can never both attach (finding #3 lost-update dupe).
+ *
+ * <p><b>Durability (AM-17 CRITICAL tier).</b> A commit stages the framed bytes through the injected
+ * {@link BlobWriter} and then routes the authoritative commit through the single-writer intent
+ * pipeline as {@link ChestIntent.CommitChestContents} (journaled + fsynced), guarded by a monotonic
+ * per-session nonce so a stale session's late commit is rejected by the reducer (finding #26). It is
+ * NOT a fire-and-forget async DB write that the disable/reload sweep window could drop and dupe.
+ *
+ * <p><b>Close wiring.</b> {@link #handleClose} drops one viewer and force-commits + evicts on the
+ * last close (releasing the Folia exclusive lock so the chest can reopen). It must be driven from an
+ * {@code InventoryCloseEvent} whose top holder is a {@link ChestHolder} — the integrator registers a
+ * {@link ChestCloseListener} for that (finding #12); the GUI {@code MenuHolder} router never sees a
+ * chest (a chest is editable, not a read-only menu).
  *
  * <p><b>Owning thread(s):</b> {@link #open} / {@link #handleClose} run on the opening/closing
  * player's region thread; the periodic sweep marshals each read onto the owning thread; {@link
- * #forceCommitAll} runs on the disable (main) thread. Live sessions are region-confined. The
- * inventory bytes never touch JDBC here — {@link BlobReader}/{@link BlobWriter} are the storage
- * seams the integrator wires to {@code Blobs.load}/{@code Blobs.store} on the storage thread.
- * <b>Mutability:</b> the map is concurrent; each {@link LiveChest} is confined to its owning thread.
+ * #commitAndCloseAll} (and its alias {@link #forceCommitAll}) run on the disable/reload thread and
+ * are exception-isolated per chest. The inventory bytes never touch JDBC here — {@link
+ * BlobReader}/{@link BlobWriter} are the storage seams the integrator wires to {@code Blobs.load}/
+ * {@code Blobs.store} on the storage thread. <b>Mutability:</b> the map is concurrent; each {@link
+ * LiveChest}'s viewer/readiness state is guarded by its own monitor for cross-thread access.
  */
 public final class ChestSessions implements Chests {
 
@@ -60,6 +78,8 @@ public final class ChestSessions implements Chests {
     private static final String EMPTY_SLOT = "-";
     private static final String SLOT_SEPARATOR = "\n";
     private static final Runnable NO_RETIRED = () -> { };
+
+    private static final Logger LOG = Logger.getLogger(ChestSessions.class.getName());
 
     private final Scheduling scheduling;
     private final IntentBus bus;
@@ -72,6 +92,11 @@ public final class ChestSessions implements Chests {
 
     private final ConcurrentHashMap<ChestKey, LiveChest> live = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, ChestKey> playerChest = new ConcurrentHashMap<>();
+
+    // Monotonic session-nonce source: seeded from wall-clock so nonces keep climbing across reloads
+    // (which recreate this engine but NOT the kernel's recorded nonce), and start above the 0 that
+    // chests load back with after a restart — the reducer accepts >= recorded and rejects lower.
+    private final AtomicLong nonceSource = new AtomicLong(System.currentTimeMillis());
 
     private volatile TaskHandle sweepTask;
 
@@ -134,23 +159,57 @@ public final class ChestSessions implements Chests {
         boolean[] created = {false};
         LiveChest chest = live.computeIfAbsent(key, k -> {
             created[0] = true;
-            return new LiveChest(k);
+            return new LiveChest(k, nextNonce());
         });
         if (created[0]) {
             initialise(player, chest, key, name, blobRef);
-        } else if (!chest.isReady()) {
-            messages.to(player, Text.LOADING);
-        } else if (caps.folia() && chest.viewers() > 0) {
-            messages.to(player, Text.IN_USE);
-        } else {
-            attachViewer(player, chest, key, name);
+            return;
+        }
+        // An already-live shared chest: the check-and-attach is atomic under the chest's monitor so
+        // exactly one opener wins the Folia exclusive lock and the viewer refcount never races.
+        Acquire outcome;
+        synchronized (chest) {
+            if (chest.isRetired()) {
+                outcome = Acquire.RETIRED;
+            } else if (!chest.isReady()) {
+                outcome = Acquire.LOADING;
+            } else if (caps.folia() && chest.viewers() > 0) {
+                outcome = Acquire.IN_USE;
+            } else {
+                chest.addViewer();
+                outcome = Acquire.ACQUIRED;
+            }
+        }
+        switch (outcome) {
+            case RETIRED -> {
+                // Evicted between our computeIfAbsent and the lock (a concurrent last-close). Help
+                // drop the dead session and retry against a fresh one — bounded to a single retry.
+                live.remove(key, chest);
+                open(player, chestName);
+            }
+            case LOADING -> messages.to(player, Text.LOADING);
+            case IN_USE -> messages.to(player, Text.IN_USE);
+            case ACQUIRED -> {
+                playerChest.put(id, key);
+                player.openInventory(chest.inventory());
+                messages.to(player, Text.OPENED, name);
+            }
+            default -> throw new IllegalStateException("unhandled acquire outcome: " + outcome);
         }
     }
 
+    /** The next monotonic session nonce (one per fresh {@link LiveChest}). */
+    private long nextNonce() {
+        return nonceSource.incrementAndGet();
+    }
+
     /**
-     * The chest-close listener hook (wired by the integrator's {@code ChestSessionListener}): drops
-     * one viewer for {@code playerId} and force-commits + evicts the shared inventory when the last
-     * viewer leaves. Runs on the closing player's region thread.
+     * The chest-close listener hook (wired by the integrator's {@link ChestCloseListener}): drops
+     * one viewer for {@code playerId} and, when the last viewer leaves, retires + evicts the shared
+     * inventory (releasing the Folia exclusive lock) and force-commits its final contents through
+     * the durable intent path. Runs on the closing player's region thread. The viewer decrement and
+     * the retire decision are atomic under the chest's monitor so a concurrent opener can never
+     * attach to a session that is being torn down.
      */
     public void handleClose(UUID playerId) {
         ChestKey key = playerChest.remove(playerId);
@@ -161,19 +220,60 @@ public final class ChestSessions implements Chests {
         if (chest == null) {
             return;
         }
-        if (chest.removeViewer() <= 0) {
-            if (chest.isReady()) {
+        boolean evict;
+        boolean ready;
+        synchronized (chest) {
+            evict = chest.removeViewer() <= 0;
+            ready = chest.isReady();
+            if (evict) {
+                chest.retire();
+            }
+        }
+        if (evict) {
+            // Retired first (above), so a racing opener sees RETIRED and reopens fresh; the map
+            // removal only clears our exact session, and the final commit is authoritative.
+            live.remove(key, chest);
+            if (ready) {
                 commitInline(chest);
             }
-            live.remove(key, chest);
         }
     }
 
     @Override
     public void forceCommitAll() {
+        commitAndCloseAll();
+    }
+
+    /**
+     * Synchronously force-commits and closes EVERY open chest session, exception-isolated per chest,
+     * then clears all session state and releases every Folia exclusive-open lock. Safe to call from
+     * the disable/reload thread: each chest is serialized on the CURRENT thread and its contents are
+     * routed through the durable {@link ChestIntent.CommitChestContents} intent path (AM-17 CRITICAL
+     * tier) rather than a fire-and-forget write, and one chest's commit failure never strands the
+     * rest.
+     *
+     * <p><b>Where the orchestrator must call this:</b> the {@code FeatureReconciler} reload teardown
+     * (before the feature scope is rebuilt — a reload otherwise never flushes open chests) and
+     * {@code onDisable} (already reached via {@link #forceCommitAll}). See the report for the exact
+     * wiring; the byte staging still flows through the injected {@link BlobWriter}, so the orchestrator
+     * must ensure that seam is durable at disable (a synchronous store, not a dropped async task).
+     *
+     * <p><b>Owning thread:</b> the caller's (disable/reload) thread; the writer daemon may already be
+     * stopped, in which case the enqueued commit intents are drained by the ordered final drain.
+     */
+    public void commitAndCloseAll() {
         for (LiveChest chest : live.values()) {
-            if (chest.isReady()) {
-                commitInline(chest);
+            try {
+                boolean ready;
+                synchronized (chest) {
+                    ready = chest.isReady();
+                    chest.retire();
+                }
+                if (ready) {
+                    commitInline(chest);
+                }
+            } catch (RuntimeException isolated) {
+                LOG.log(Level.WARNING, "chest commit failed on flush (continuing with the rest)", isolated);
             }
         }
         live.clear();
@@ -194,12 +294,10 @@ public final class ChestSessions implements Chests {
 
     private void readyAndOpen(Player player, LiveChest chest, ChestKey key, String name, byte[] framed) {
         Inventory inventory = buildInventory(key, framed);
-        chest.ready(inventory, player.getUniqueId());
-        attachViewer(player, chest, key, name);
-    }
-
-    private void attachViewer(Player player, LiveChest chest, ChestKey key, String name) {
-        chest.addViewer();
+        // The creator becomes the first viewer atomically with becoming ready, so a Folia opener that
+        // arrives in the load window sees either not-ready (LOADING) or viewers>0 (IN_USE), never a
+        // ready chest with a zero refcount it could wrongly acquire.
+        chest.readyAsOwner(inventory, player.getUniqueId());
         playerChest.put(player.getUniqueId(), key);
         player.openInventory(chest.inventory());
         messages.to(player, Text.OPENED, name);
@@ -209,17 +307,30 @@ public final class ChestSessions implements Chests {
 
     private void sweep() {
         for (LiveChest chest : live.values()) {
-            if (!chest.isReady() || chest.viewers() <= 0) {
+            if (!chest.committable()) {
                 continue;
             }
             if (caps.folia()) {
-                Player owner = chest.owner() == null ? null : Players.get(chest.owner());
+                UUID ownerId = chest.owner();
+                Player owner = ownerId == null ? null : Players.get(ownerId);
                 if (owner != null) {
-                    scheduling.runOn(owner, () -> commitInline(chest), NO_RETIRED);
+                    scheduling.runOn(owner, () -> commitIfActive(chest), NO_RETIRED);
                 }
             } else {
-                scheduling.runGlobal(() -> commitInline(chest));
+                scheduling.runGlobal(() -> commitIfActive(chest));
             }
+        }
+    }
+
+    /**
+     * The marshaled sweep commit: skips if this session was evicted/superseded between the sweep
+     * read and now (its key no longer maps to this exact {@link LiveChest}) — committing a stale
+     * session's bytes over a newer one is the finding #26 lost-update dupe (the deterministic blob
+     * ref means a stale write silently corrupts the newer session's contents).
+     */
+    private void commitIfActive(LiveChest chest) {
+        if (live.get(chest.key()) == chest && chest.committable()) {
+            commitInline(chest);
         }
     }
 
@@ -231,6 +342,9 @@ public final class ChestSessions implements Chests {
         }
         byte[] framed = serialize(inventory.getContents());
         long ref = blobRefFor(chest.key());
+        // Stage the framed bytes, then route the authoritative commit through the journaled intent
+        // pipeline (guarded by the session nonce). Bytes first so the ref is only committed for
+        // content that has been handed to the durable store.
         blobWriter.write(ref, framed, System.currentTimeMillis());
         bus.submitSystem(new ChestIntent.CommitChestContents(
                 chest.key().faction(), chest.key().name(), ref, chest.nonce(), null));
@@ -324,13 +438,29 @@ public final class ChestSessions implements Chests {
 
     // ── nested types ────────────────────────────────────────────────────────────────────────────
 
+    /** The outcomes of attaching a viewer to an already-live shared chest. */
+    private enum Acquire {
+        /** The session was evicted between lookup and lock — retry against a fresh one. */
+        RETIRED,
+        /** The inventory is still loading; no viewer attached. */
+        LOADING,
+        /** Folia exclusive-open: another viewer already holds it; refused. */
+        IN_USE,
+        /** A viewer was attached; open the inventory. */
+        ACQUIRED
+    }
+
     /** The identity of one team chest: the owning faction handle and normalized chest name. */
     record ChestKey(int faction, String name) {
     }
 
     /**
-     * One shared live chest inventory with a viewer refcount, confined to its owning region thread.
-     * The refcount / readiness transitions are Bukkit-free so they are unit-testable directly.
+     * One shared live chest inventory with a viewer refcount and a monotonic session nonce. The
+     * refcount / readiness / retire transitions are Bukkit-free so they are unit-testable directly.
+     *
+     * <p><b>Owning thread(s):</b> mutated from the opening/closing region threads and read from the
+     * async sweep, so every viewer/readiness accessor is guarded by this instance's monitor.
+     * <b>Mutability:</b> monitor-confined; {@link #key} and {@link #nonce} are final.
      */
     static final class LiveChest {
 
@@ -340,10 +470,11 @@ public final class ChestSessions implements Chests {
         private UUID owner;
         private int viewers;
         private boolean ready;
+        private boolean retired;
 
-        LiveChest(ChestKey key) {
+        LiveChest(ChestKey key, long nonce) {
             this.key = key;
-            this.nonce = ThreadLocalRandom.current().nextLong();
+            this.nonce = nonce;
         }
 
         ChestKey key() {
@@ -354,39 +485,60 @@ public final class ChestSessions implements Chests {
             return nonce;
         }
 
-        Inventory inventory() {
+        synchronized Inventory inventory() {
             return inventory;
         }
 
-        UUID owner() {
+        synchronized UUID owner() {
             return owner;
         }
 
-        boolean isReady() {
+        synchronized boolean isReady() {
             return ready;
         }
 
+        /** {@code true} once this session has been torn down (last close / flush). */
+        synchronized boolean isRetired() {
+            return retired;
+        }
+
+        /** {@code true} iff ready with at least one viewer — the sweep-commit precondition. */
+        synchronized boolean committable() {
+            return ready && viewers > 0;
+        }
+
         /** Marks the chest live with its built inventory and first owner (Folia exclusive owner). */
-        void ready(Inventory inventory, UUID owner) {
+        synchronized void ready(Inventory inventory, UUID owner) {
             this.inventory = inventory;
             this.owner = owner;
             this.ready = true;
         }
 
+        /** Becomes ready with its owner AND that owner as the first viewer, atomically. */
+        synchronized void readyAsOwner(Inventory inventory, UUID owner) {
+            ready(inventory, owner);
+            this.viewers = 1;
+        }
+
+        /** Marks this session torn down so no further opener may attach to it. */
+        synchronized void retire() {
+            this.retired = true;
+        }
+
         /** Adds one viewer; returns the new count. */
-        int addViewer() {
+        synchronized int addViewer() {
             return ++viewers;
         }
 
         /** Removes one viewer (floored at 0); returns the remaining count. */
-        int removeViewer() {
+        synchronized int removeViewer() {
             if (viewers > 0) {
                 viewers--;
             }
             return viewers;
         }
 
-        int viewers() {
+        synchronized int viewers() {
             return viewers;
         }
     }
