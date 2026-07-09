@@ -34,7 +34,7 @@ import xyz.wagyourtail.jvmdg.gradle.task.ShadeJar
 // ClassVisitor tasks over the compiled :core/:platform/:api classes.
 buildscript {
     repositories { mavenCentral() }
-    dependencies { classpath("org.ow2.asm:asm:9.7") }
+    dependencies { classpath("org.ow2.asm:asm:9.10.1") }
 }
 
 plugins {
