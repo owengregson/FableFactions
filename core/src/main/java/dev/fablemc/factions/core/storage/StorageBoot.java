@@ -14,8 +14,7 @@ import java.util.function.LongSupplier;
 import java.util.function.ToIntFunction;
 import java.util.logging.Logger;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import org.apache.commons.dbcp2.BasicDataSource;
 
 import dev.fablemc.factions.core.storage.load.BaselineLoader;
 import dev.fablemc.factions.kernel.config.ConfigImage;
@@ -39,14 +38,14 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class StorageBoot implements AutoCloseable {
 
-    private final HikariDataSource dataSource;
+    private final BasicDataSource dataSource;
     private final SqlDialect dialect;
     private final String backendLabel;
     private final AdvisoryLock lock;
     private final StorageProjector projector;
     private final BaselineLoader loader;
 
-    private StorageBoot(HikariDataSource dataSource, SqlDialect dialect, String backendLabel,
+    private StorageBoot(BasicDataSource dataSource, SqlDialect dialect, String backendLabel,
                         AdvisoryLock lock, StorageProjector projector, BaselineLoader loader) {
         this.dataSource = dataSource;
         this.dialect = dialect;
@@ -95,7 +94,7 @@ public final class StorageBoot implements AutoCloseable {
         String label = mysql ? "MySQL" : "H2";
         String dbKey = mysql ? view.mysqlDatabase() : view.h2File();
 
-        HikariDataSource ds = buildPool(view, dialect, mysqlPassword, dataFolder, mysql);
+        BasicDataSource ds = buildPool(view, dialect, mysqlPassword, dataFolder, mysql);
         AdvisoryLock lock = null;
         try {
             try (Connection conn = ds.getConnection()) {
@@ -111,11 +110,11 @@ public final class StorageBoot implements AutoCloseable {
             return new StorageBoot(ds, dialect, label, lock, projector, loader);
         } catch (SQLException ex) {
             releaseLock(lock);
-            ds.close();
+            closeQuietly(ds);
             throw new StorageException("storage boot failed", ex);
         } catch (RuntimeException ex) {
             releaseLock(lock);   // finding #17: a post-lock failure must release the lock, not leak it
-            ds.close();
+            closeQuietly(ds);
             throw ex;
         }
     }
@@ -237,25 +236,35 @@ public final class StorageBoot implements AutoCloseable {
         try {
             lock.close();
         } finally {
-            dataSource.close();
+            closeQuietly(dataSource);
         }
     }
 
-    private static HikariDataSource buildPool(StorageConfigView view, SqlDialect dialect,
+    private static BasicDataSource buildPool(StorageConfigView view, SqlDialect dialect,
                                               String mysqlPassword, File dataFolder, boolean mysql) {
-        HikariConfig cfg = new HikariConfig();
-        cfg.setPoolName("fable-storage-pool");
-        cfg.setDriverClassName(dialect.driverClassName());
+        BasicDataSource ds = new BasicDataSource();
+        // Explicit relocated driver class name (AM-10): the shaded jar excludes the JDBC service
+        // file, so the pool must be told which driver to load rather than discover it.
+        ds.setDriverClassName(dialect.driverClassName());
         if (mysql) {
-            cfg.setJdbcUrl(MySqlDialect.url(view.mysqlHost(), view.mysqlPort(), view.mysqlDatabase()));
-            cfg.setUsername(view.mysqlUsername());
-            cfg.setPassword(mysqlPassword == null ? "" : mysqlPassword);
-            cfg.setMaximumPoolSize(Math.max(1, view.mysqlPoolSize()));
+            ds.setUrl(MySqlDialect.url(view.mysqlHost(), view.mysqlPort(), view.mysqlDatabase()));
+            ds.setUsername(view.mysqlUsername());
+            ds.setPassword(mysqlPassword == null ? "" : mysqlPassword);
+            ds.setMaxTotal(Math.max(1, view.mysqlPoolSize()));
         } else {
-            cfg.setJdbcUrl(h2Url(view.h2File(), dataFolder));
-            cfg.setMaximumPoolSize(1);   // single-writer file/mem DB (AM-10)
+            ds.setUrl(h2Url(view.h2File(), dataFolder));
+            ds.setMaxTotal(1);   // single-writer file/mem DB (AM-10)
         }
-        return new HikariDataSource(cfg);
+        return ds;
+    }
+
+    /** Closes a DBCP2 pool, swallowing the checked close exception (best-effort cleanup path). */
+    private static void closeQuietly(BasicDataSource ds) {
+        try {
+            ds.close();
+        } catch (SQLException ignored) {
+            // boot-failure / shutdown cleanup: a pool that won't close cleanly is dropped anyway
+        }
     }
 
     /** Builds the H2 JDBC URL: a {@code mem:} handle passes through; otherwise a file DB under the data folder. */

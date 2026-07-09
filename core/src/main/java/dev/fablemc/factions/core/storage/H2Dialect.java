@@ -1,10 +1,11 @@
 package dev.fablemc.factions.core.storage;
 
 /**
- * The H2 backend dialect (AM-10). Upserts rewrite to H2's {@code MERGE INTO … KEY(…)} form,
- * which — unlike {@code ON DUPLICATE KEY UPDATE} — H2 1.4.200 implements natively. The JDBC URL
- * uses {@code MODE=MySQL;DB_CLOSE_DELAY=-1} and pool size 1 (single-writer file DB); it does
- * <b>NOT</b> use {@code NON_KEYWORDS} (that flag is H2 2.x-only — AM-10).
+ * The H2 backend dialect. Upserts rewrite to H2's {@code MERGE INTO … KEY(…)} form, which — unlike
+ * {@code ON DUPLICATE KEY UPDATE} — H2 implements natively. The JDBC URL uses
+ * {@code MODE=MySQL;DB_CLOSE_DELAY=-1} and pool size 1 (single-writer file DB). Backed by H2
+ * 2.2.224 (the latest Java-8-native line); the schema + MySQL mode clears 2.x's stricter reserved
+ * words without needing the {@code NON_KEYWORDS} flag (the full-DDL storage tests confirm it).
  *
  * <p><b>Owning thread(s):</b> stateless. <b>Mutability:</b> immutable singleton.
  */
@@ -35,7 +36,7 @@ public final class H2Dialect implements SqlDialect {
 
     /**
      * Builds the H2 file-DB URL: {@code jdbc:h2:file:<path>;MODE=MySQL;DB_CLOSE_DELAY=-1}. No
-     * {@code NON_KEYWORDS} flag (AM-10 — that is H2 2.x-only and would fail on the pinned 1.4.200).
+     * {@code NON_KEYWORDS} flag is needed — the schema clears H2 2.x's reserved words in MySQL mode.
      */
     public static String fileUrl(String absolutePath) {
         return "jdbc:h2:file:" + absolutePath + ";MODE=MySQL;DB_CLOSE_DELAY=-1";

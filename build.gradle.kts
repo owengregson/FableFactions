@@ -32,6 +32,22 @@ subprojects {
         options.compilerArgs.add("-parameters")
     }
 
+    // BUILD-HIGH dependency consumption (does NOT change first-party bytecode). A modern
+    // shaded dep may publish Gradle Module Metadata pinning a high runtime floor via
+    // org.gradle.jvm.version — Adventure 5.x declares 21 — and Gradle's variant selection
+    // would then REJECT it against a release-17 consumer. We build on JDK 25 and hand every
+    // shaded dep to JVMDowngrader, which lowers its bytecode to the v52 base tier (keeping the
+    // pristine original under META-INF/versions/<N> for JVMs that can run it), so the consumer
+    // can honestly claim JVM-21 capability for variant SELECTION. This raises ONLY the
+    // TargetJvmVersion attribute on resolvable classpaths; options.release stays 17, so
+    // first-party bytecode remains v61 and the v52/v57/v61 tier model is untouched. The dep's
+    // own high-Java bytecode is what jvmdg downgrades — we never down-version the dependency.
+    configurations.matching { it.isCanBeResolved }.configureEach {
+        attributes {
+            attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+        }
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         testLogging { events("passed", "skipped", "failed") }

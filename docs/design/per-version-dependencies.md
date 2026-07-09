@@ -1,13 +1,33 @@
-# Evaluation — per-version dependency bundling
+# Dependency modernization — what shipped and why
 
-**Status: DECISION (v1 beta).** Question raised in wave 5: can the mega-jar carry
-*different dependency versions per Minecraft/Java version* — newest deps for modern
-servers, last-supported deps for legacy — the way it already carries per-version
-**first-party** bytecode (v52 / v57 / v61 tiers)?
+**Status: DONE (v1 beta.3).** Wave 5 asked whether the mega-jar could run newer dependencies
+across the whole 1.7.10→26.x range. The original question — *bundle a different version per
+Minecraft/Java version* — is unsound (see "Why naïve Multi-Release override does NOT work"
+below: MR overrides can't version-swap a library's class graph). But the project owner's
+reframing works and is now **implemented**: ship a **single, newest** version of each dependency
+and let the same jvmdg pipeline that downgrades our own bytecode downgrade *it* too — plus a
+`build-high` variant-selection tweak for deps that publish a high `org.gradle.jvm.version`.
 
-**Verdict: not for v1. Keep the single pinned Java-8-line stack (AM-10). The mechanism
-that would make it safe is documented below as a post-v1 option, to be revisited only when
-a *concrete* modern-only dependency win is identified.**
+## Shipped dependency set (beta.3)
+
+| Dependency | was | now | how |
+|---|---|---|---|
+| Connection pool | HikariCP 4.0.3 (pinned) | **Apache Commons DBCP2 2.14.0** (latest) | migrated (`StorageBoot`): DBCP2's newest release is Java-8-native, so it drops into the v52 base tier with no jvmdg tricks — **removes the HikariCP pin** |
+| Logging binder | slf4j-nop 1.7.30 (pinned) | **gone** | DBCP2 logs via commons-logging (bundled) — **removes the slf4j pin** |
+| Text | Adventure 4.x | **Adventure 5.2.0** (latest) | build-high: 5.x declares jvm.version=21; raise the consumer TargetJvmVersion to 21, jvmdg downgrades its v65 bytecode to v52 and keeps the v65 originals under `META-INF/versions/21`. Zero `.java` change |
+| MySQL driver | 8.0.33 | **9.7.0** (latest) | consumed as-is; the optional OpenTelemetry handler is `<clinit>`-guarded and ignored |
+| Embedded DB | H2 1.4.200 (pinned) | **H2 2.2.224** | the latest **Java-8-native** H2 line (2.3.x needs Java 11 and jvmdg can't resolve its excluded `tools/Server` on downgrade). Our schema + MODE=MySQL clears 2.x's reserved words with no `NON_KEYWORDS`. Beta: no on-disk migration from the 1.4.200 format — a fresh DB is created |
+| bStats | 3.2.1 | 3.2.1 | already latest |
+
+First-party v52/v57/v61 tiers are untouched (`options.release` stays 17); the only new tier is
+`versions/21`, carrying the relocated Adventure-5 originals for Java-21+ JVMs. Jar 10.68 → 11.73 MB.
+Full build + all 7 gates + tests green. The single remaining hold is H2 at 2.2.224 rather than
+2.3.x — a principled Java-8-floor hold, the H2 analog of "use the newest that stays on the base
+tier," exactly like DBCP2.
+
+---
+
+## Appendix — why the *per-version bundling* framing was rejected
 
 ---
 

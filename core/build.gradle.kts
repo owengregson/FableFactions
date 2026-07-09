@@ -100,8 +100,8 @@ dependencies {
     implementation(libs.adventure.api) { exclude(group = "org.jetbrains", module = "annotations") }
     implementation(libs.adventure.minimessage) { exclude(group = "org.jetbrains", module = "annotations") }
     implementation(libs.adventure.serializer.legacy) { exclude(group = "org.jetbrains", module = "annotations") }
-    implementation(libs.hikaricp)
-    implementation(libs.slf4j.nop)   // provides the relocated slf4j binder (see catalog note)
+    implementation(libs.commons.dbcp2)   // connection pool (Java-8-native latest; pulls commons-pool2 + commons-logging)
+    implementation(libs.commons.pool2)
     implementation(libs.h2)
     implementation(libs.mysql)
     implementation(libs.bstats.bukkit)
@@ -136,11 +136,12 @@ tasks.shadowJar {
 
     relocate("net.kyori", "dev.fablemc.factions.lib.adventure")
     relocate("org.bstats", "dev.fablemc.factions.lib.bstats")
-    relocate("com.zaxxer.hikari", "dev.fablemc.factions.lib.hikari")
+    relocate("org.apache.commons.dbcp2", "dev.fablemc.factions.lib.dbcp2")
+    relocate("org.apache.commons.pool2", "dev.fablemc.factions.lib.pool2")
+    // DBCP2/pool2 log via commons-logging — shade it too (no slf4j binding needed).
+    relocate("org.apache.commons.logging", "dev.fablemc.factions.lib.commonslogging")
     relocate("org.h2", "dev.fablemc.factions.lib.h2")
     relocate("com.mysql", "dev.fablemc.factions.lib.mysql")
-    // HikariCP 4.x transitively needs slf4j-api — shade it too (AM-10).
-    relocate("org.slf4j", "dev.fablemc.factions.lib.slf4j")
 
     // AM-10: the relocated JDBC drivers use explicit driverClassName; drop the service
     // file, and strip third-party Multi-Release trees before the downgrade input.
@@ -176,10 +177,18 @@ tasks.shadowJar {
     exclude("**/h2/tools/Shell*")                          // references server/web ConnectionInfo
     exclude("**/h2/util/DbDriverActivator*")               // org.osgi BundleActivator
     exclude("**/h2/util/OsgiDataSourceFactory*")           // org.osgi.service.jdbc
-    exclude("**/hikari/metrics/prometheus/**")             // io.prometheus (not linked by core)
-    exclude("**/hikari/hibernate/**")                      // org.hibernate ConnectionProvider
-    exclude("**/hikari/util/JavassistProxyFactory*")       // org.javassist (build-time proxy gen)
     exclude("**/mysql/cj/jdbc/integration/**")             // com.mchange c3p0 ConnectionTester
+    // commons-logging's servlet-container cleanup listener implements javax.servlet.* — javax/ is
+    // an un-ignorable HARD verifyJdk8Api tier (route 1, like the H2 web console), and Paper is not
+    // a servlet container, so strip it. (Its optional slf4j/cglib bridges stay bundled but dead —
+    // route 2, ignored below — since org/slf4j and net/sf/cglib ARE ignorable external optionals.)
+    // NB shadow filters on the SOURCE path, so match the un-relocated org/apache/commons/logging.
+    exclude("**/commons/logging/impl/ServletContextCleaner*")
+    // DBCP2's optional MANAGED (XA/JTA) datasource pulls javax.transaction, which in turn references
+    // javax.enterprise/interceptor (CDI) — un-ignorable javax/ HARD packages. We use the plain
+    // BasicDataSource, never the managed pool, so strip that package and the bundled JTA API.
+    exclude("**/dbcp2/managed/**")
+    exclude("javax/transaction/**")
     // AuthenticationOciClient stays BUNDLED (route 2): it names only com.oracle.bmc
     // externally, which verifyJdk8Api ignores as a guarded-optional SDK (never linked on the
     // native/basic-auth path). Excluding it would dangle NativeAuthenticationProvider's ref.
@@ -476,7 +485,8 @@ abstract class VerifyRelocationTask : DefaultTask() {
     @TaskAction
     fun run() {
         val libPrefix = "dev/fablemc/factions/lib/"
-        val tokens = listOf("net/kyori", "com/zaxxer", "org/h2", "com/mysql", "org/slf4j")
+        val tokens = listOf("net/kyori", "org/apache/commons/dbcp2", "org/apache/commons/pool2",
+            "org/apache/commons/logging", "org/h2", "com/mysql")
         val entryViolations = mutableListOf<String>()
         val refViolations = mutableListOf<String>()
         ZipFile(jarFile.get().asFile).use { zip ->
@@ -538,6 +548,7 @@ abstract class VerifyDowngradeTask : DefaultTask() {
         val baseBytesByLogical = mutableMapOf<String, ByteArray>()
         val allEntryNames = hashSetOf<String>()
         val v13JvmdgRefs = sortedSetOf<String>()
+        var v21DepClasses = 0
 
         JarFile(file).use { jar ->
             val mr = jar.manifest?.mainAttributes?.getValue("Multi-Release")
@@ -574,8 +585,24 @@ abstract class VerifyDowngradeTask : DefaultTask() {
                         v13JvmdgRefs.addAll(MegaJarScan.tokensWithPrefix(text, jvmdgRuntime))
                         if (name == "META-INF/versions/13/$sentinel") v13SentinelMajor = major
                     }
+                    name.startsWith("META-INF/versions/21/") -> {
+                        // Modern-dependency tier (build-high). jvmdg keeps a shaded dep's ORIGINAL
+                        // post-v61 bytecode here when the dep was built on a newer JDK than the
+                        // first-party v61 floor (Adventure 5.x is Java-21 / v65): only 21+ JVMs load
+                        // it, everyone else runs the v52 base copy jvmdg produced. Valid ONLY if it
+                        // carries relocated third-party (lib.*) classes and NO first-party (which must
+                        // stay in the 13/17 tiers), with genuinely post-v61 bytecode — assert that
+                        // shape rather than blanket-accepting versions/21, so a real leak still fails.
+                        if (MegaJarScan.isFirstParty(logical)) {
+                            problems.add("versions/21 carries first-party class $logical (first-party must stay in versions/13-17)")
+                        } else if (major <= 61) {
+                            problems.add("versions/21 dep class $logical is v$major (not a post-v61 modern-dependency tier)")
+                        } else {
+                            v21DepClasses++
+                        }
+                    }
                     name.startsWith("META-INF/versions/") ->
-                        problems.add("unexpected versioned tier entry $name (only versions/13 and versions/17 are expected)")
+                        problems.add("unexpected versioned tier entry $name (only versions/13, versions/17 and the versions/21 modern-dep tier are expected)")
                     else -> {
                         if (major > 52) problems.add("base entry $logical is v$major (>52)")
                         if (MegaJarScan.isFirstParty(logical)) {
@@ -623,7 +650,8 @@ abstract class VerifyDowngradeTask : DefaultTask() {
             problems.take(30).joinToString("\n") { "  - $it" })
         report.get().asFile.writeText("ok\n")
         logger.lifecycle("[verifyDowngrade] OK — base ≤ v52; ${v13FirstParty.size} first-party class(es) forked to v57 under versions/13; " +
-            "${v17FirstParty.size} to v61 under versions/17; sentinel forked 52/57/61; no reflective-record token; versions/13 jvmdg refs resolve.")
+            "${v17FirstParty.size} to v61 under versions/17; sentinel forked 52/57/61; no reflective-record token; versions/13 jvmdg refs resolve" +
+            (if (v21DepClasses > 0) "; $v21DepClasses post-v61 modern-dep class(es) under versions/21 (build-high dep originals)." else "."))
     }
 }
 
@@ -922,14 +950,22 @@ val serverProvidedIgnores = listOf(
     "net/md_5", "net/milkbowl", "com/sk89q", "me/clip", "org/dynmap", "com/earth2me", "github/scarsz",
     "com/griefcraft", "org/apache", "org/yaml",
     // Guarded-optional third-party integrations HARD-referenced by BUNDLED classes of the
-    // shaded storage libs, but never LINKED by the embedded-DB/JDBC path: HikariPool casts
-    // to the Dropwizard/Micrometer metric registries only when one is configured
-    // (string-guarded); H2's ValueGeometry touches JTS only when the optional JTS lib is
-    // present; the MySQL OCI auth plugin (AuthenticationOciClient) reads com.oracle.bmc only
-    // when authenticationPlugins names it. All external SDKs never on our path, so never a
-    // runtime miss — the Mental com/viaversion precedent (a guarded optional integration
-    // ignored rather than bundled). The allowlist stays EMPTY.
-    "com/codahale", "io/micrometer", "org/locationtech", "com/oracle",
+    // shaded storage libs, but never LINKED by the embedded-DB/JDBC path: H2's ValueGeometry
+    // touches JTS only when the optional JTS lib is present; the MySQL OCI auth plugin
+    // (AuthenticationOciClient) reads com.oracle.bmc only when authenticationPlugins names it;
+    // the MySQL OpenTelemetry handler (cj.otel, new in connector-j 9.x) touches io.opentelemetry
+    // only when its <clinit>-guarded Class.forName("io.opentelemetry.api.GlobalOpenTelemetry")
+    // succeeds — absent, NativeSession falls back to NoopTelemetryHandler and the handler's
+    // io.opentelemetry-typed members never link. All external SDKs never on our path, so never a
+    // runtime miss — the Mental com/viaversion precedent (a guarded optional integration ignored
+    // rather than bundled). The allowlist stays EMPTY. (DBCP2/pool2 carry no such optional SDK ref.)
+    "org/locationtech", "com/oracle", "io/opentelemetry",
+    // commons-logging bundles optional bridges to slf4j (Slf4jLogFactory) and commons-pool2 an
+    // optional cglib proxy source — both guarded (commons-logging discovers a Log impl in a
+    // try/catch and we ship no slf4j; pool2 defaults to JDK proxies and we ship no cglib), so the
+    // classes are dead and their org/slf4j + net/sf/cglib references never link. Ignorable external
+    // optionals (route 2), same as the OCI/OTel SDKs above.
+    "org/slf4j", "net/sf/cglib",
 )
 
 // A relocated FIRST-PARTY class we were FORCED to strip from the shaded jar (route (1) in
@@ -946,7 +982,7 @@ val gateReports = layout.buildDirectory.dir("verify-gates")
 
 val verifyRelocation = tasks.register<VerifyRelocationTask>("verifyRelocation") {
     group = "verification"
-    description = "Fails if net/kyori, com/zaxxer, org/h2, com/mysql or org/slf4j survives outside the lib prefix."
+    description = "Fails if net/kyori, org/apache/commons/{dbcp2,pool2,logging}, org/h2 or com/mysql survives outside the lib prefix."
     jarFile.set(canonicalJar)
     report.set(gateReports.map { it.file("relocation.txt") })
 }
