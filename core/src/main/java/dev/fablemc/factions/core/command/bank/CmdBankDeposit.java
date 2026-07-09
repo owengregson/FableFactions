@@ -10,6 +10,7 @@ import dev.fablemc.factions.core.command.CommandGuards;
 import dev.fablemc.factions.core.command.CommandNode;
 import dev.fablemc.factions.core.command.VaultBridge;
 import dev.fablemc.factions.core.command.member.CommandFlow;
+import dev.fablemc.factions.core.pipeline.SubmitResult;
 import dev.fablemc.factions.kernel.intent.EconomyIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
@@ -83,8 +84,13 @@ final class CmdBankDeposit extends CommandNode {
             return;
         }
         double newBalance = MoneyMath.round2(faction.bank() + finalAmount);
-        CommandFlow.submit(ctx, actor,
+        SubmitResult result = CommandFlow.submitReporting(ctx, actor,
                 new EconomyIntent.CreditBank(CommandFlow.handleOf(snap, faction), finalAmount, actor, NO_ESCROW),
                 DEPOSITED, CommandFlow.money(finalAmount), CommandFlow.money(newBalance));
+        if (result != SubmitResult.ACCEPTED) {
+            // The wallet was already debited but CreditBank never reduced — return the money rather
+            // than destroy it (findings #3/#18). The busy/shutdown message was already sent above.
+            vault.deposit(ctx.player(), finalAmount);
+        }
     }
 }

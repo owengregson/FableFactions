@@ -3,6 +3,7 @@ package dev.fablemc.factions.kernel.reduce;
 import dev.fablemc.factions.kernel.effect.EconomyEffect;
 import dev.fablemc.factions.kernel.effect.ExternalEffect;
 import dev.fablemc.factions.kernel.intent.EconomyIntent;
+import dev.fablemc.factions.kernel.intent.Origin;
 import dev.fablemc.factions.kernel.msg.ReasonCode;
 import dev.fablemc.factions.kernel.rules.EconomyRules;
 import dev.fablemc.factions.kernel.rules.FactionEdit;
@@ -68,6 +69,12 @@ final class EconomyReducer {
         if (f == null) {
             return;
         }
+        // Re-validate membership at reduce time: an intent queued before the actor was kicked must
+        // not still drain the bank after the kick (finding #42). Admin/system origins bypass.
+        if (s.origin.channel() == Origin.PLAYER
+                && s.memberOfOrReject(c.actor(), f.idx(), ReasonCode.NOT_IN_FACTION) < 0) {
+            return;
+        }
         double amount = MoneyMath.round2(c.amount());
         if (s.rejectIf(EconomyRules.validateWithdraw(s.state.config().economy(), f.bank(), amount))) {
             return;
@@ -115,6 +122,12 @@ final class EconomyReducer {
     static void transferBank(ReduceSupport s, EconomyIntent.TransferBank c) {
         Faction from = s.factionOrReject(c.from());
         if (from == null) {
+            return;
+        }
+        // Re-validate membership at reduce time (finding #42): a transfer queued before the actor
+        // was kicked from the source faction must not still move its bank. Admin/system bypass.
+        if (s.origin.channel() == Origin.PLAYER
+                && s.memberOfOrReject(c.actor(), from.idx(), ReasonCode.NOT_IN_FACTION) < 0) {
             return;
         }
         Faction to = s.factionOrReject(c.to());

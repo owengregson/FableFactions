@@ -173,12 +173,18 @@ final class PowerReducer {
 
     static void buyPower(ReduceSupport s, PowerIntent.BuyPower c) {
         PowerConfig pc = s.power();
+        // The wallet was already debited by the command before this reduced (AM-7). Every rejection
+        // here must refund the cost, or a config reload between the command's snapshot and this
+        // reduce (buy disabled) — or a re-validated invalid amount — silently destroys the money
+        // (finding #38), exactly as the freeze/partial paths below already refund.
         if (!pc.buyEnabled()) {
             s.reject(ReasonCode.POWER_BUY_DISABLED);
+            s.emit(new ExternalEffect.EscrowRefund(s.seq, s.origin, c.escrowId(), c.player(), c.cost()));
             return;
         }
         if (!(c.points() > 0.0) || c.points() > pc.buyMaxPerPurchase()) {
             s.reject(ReasonCode.POWER_BUY_INVALID_AMOUNT);
+            s.emit(new ExternalEffect.EscrowRefund(s.seq, s.origin, c.escrowId(), c.player(), c.cost()));
             return;
         }
         int ord = s.ensureMember(c.player(), "");

@@ -10,6 +10,7 @@ import dev.fablemc.factions.core.command.CommandNode;
 import dev.fablemc.factions.core.command.Completions;
 import dev.fablemc.factions.core.command.VaultBridge;
 import dev.fablemc.factions.core.command.member.CommandFlow;
+import dev.fablemc.factions.core.pipeline.SubmitResult;
 import dev.fablemc.factions.kernel.config.PowerConfig;
 import dev.fablemc.factions.kernel.intent.PowerIntent;
 import dev.fablemc.factions.kernel.msg.MessageKey;
@@ -73,8 +74,13 @@ final class CmdPowerBuy extends CommandNode {
             ctx.sendReason(ReasonCode.POWER_BUY_INSUFFICIENT_FUNDS, CommandFlow.money(cost));
             return;
         }
-        CommandFlow.submit(ctx, actor, new PowerIntent.BuyPower(actor, actual, cost, NO_ESCROW),
+        SubmitResult result = CommandFlow.submitReporting(ctx, actor,
+                new PowerIntent.BuyPower(actor, actual, cost, NO_ESCROW),
                 SUCCESS, CommandFlow.fmt1(actual), CommandFlow.money(cost));
+        if (result != SubmitResult.ACCEPTED) {
+            // Wallet debited but BuyPower never reduced — refund rather than destroy (finding #18).
+            vault.deposit(ctx.player(), cost);
+        }
     }
 
     private static double currentPower(KernelSnapshot snap, UUID actor) {

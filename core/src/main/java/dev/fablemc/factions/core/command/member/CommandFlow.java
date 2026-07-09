@@ -54,6 +54,19 @@ public final class CommandFlow {
      */
     public static void submit(CommandContext ctx, UUID actor, Intent intent,
                               @Nullable MessageKey onSuccess, String... successArgs) {
+        submitReporting(ctx, actor, intent, onSuccess, successArgs);
+    }
+
+    /**
+     * As {@link #submit}, but RETURNS the lane outcome so a caller that performed an external
+     * mutation before submitting (a Vault wallet debit on {@code /f bank deposit} / {@code /f power
+     * buy}) can compensate it when the lane rejects the intent — otherwise the money is debited but
+     * the {@code CreditBank}/{@code BuyPower} never reduces, destroying it (findings #3/#18). The
+     * reducer stays the authority for a race it accepts-then-rejects (its own refund/{@code Rejected}
+     * effect covers that); this only closes the never-submitted gap.
+     */
+    public static SubmitResult submitReporting(CommandContext ctx, UUID actor, Intent intent,
+                                               @Nullable MessageKey onSuccess, String... successArgs) {
         SubmitResult result = ctx.services().bus().submit(intent, Origin.player(actor));
         switch (result) {
             case ACCEPTED -> {
@@ -64,6 +77,7 @@ public final class CommandFlow {
             case REJECTED_BUSY -> ctx.sendReason(ReasonCode.BUSY);
             case REJECTED_SHUTDOWN -> ctx.sendReason(ReasonCode.SHUTTING_DOWN);
         }
+        return result;
     }
 
     /**
