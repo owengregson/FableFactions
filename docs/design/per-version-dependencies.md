@@ -1,13 +1,45 @@
-# Evaluation — per-version dependency bundling
+# Dependency modernization — what shipped and why
 
-**Status: DECISION (v1 beta).** Question raised in wave 5: can the mega-jar carry
-*different dependency versions per Minecraft/Java version* — newest deps for modern
-servers, last-supported deps for legacy — the way it already carries per-version
-**first-party** bytecode (v52 / v57 / v61 tiers)?
+**Status: DONE (v1 beta.3).** Wave 5 asked whether the mega-jar could run newer dependencies
+across the whole 1.7.10→26.x range. The original question — *bundle a different version per
+Minecraft/Java version* — is unsound (see "Why naïve Multi-Release override does NOT work"
+below: MR overrides can't version-swap a library's class graph). But the project owner's
+reframing works and is now **implemented**: ship a **single, newest** version of each dependency
+and let the same jvmdg pipeline that downgrades our own bytecode downgrade *it* too — plus a
+`build-high` variant-selection tweak for deps that publish a high `org.gradle.jvm.version`.
 
-**Verdict: not for v1. Keep the single pinned Java-8-line stack (AM-10). The mechanism
-that would make it safe is documented below as a post-v1 option, to be revisited only when
-a *concrete* modern-only dependency win is identified.**
+## Shipped dependency set (beta.3)
+
+| Dependency | was | now | how |
+|---|---|---|---|
+| Connection pool | HikariCP 4.0.3 (pinned) | **Apache Commons DBCP2 2.14.0** (latest) | migrated (`StorageBoot`): DBCP2's newest release is Java-8-native, so it drops into the v52 base tier with no jvmdg tricks — **removes the HikariCP pin** |
+| Logging binder | slf4j-nop 1.7.30 (pinned) | **gone** | DBCP2 logs via commons-logging (bundled) — **removes the slf4j pin** |
+| MySQL driver | 8.0.33 | **9.7.0** (latest) | consumed as-is; the optional OpenTelemetry handler is `<clinit>`-guarded and ignored |
+| Embedded DB | H2 1.4.200 (pinned) | **H2 2.2.224** | the latest **Java-8-native** H2 line (2.3.x needs Java 11 and jvmdg can't resolve its excluded `tools/Server` on downgrade). Our schema + MODE=MySQL clears 2.x's reserved words with no `NON_KEYWORDS`. Beta: no on-disk migration from the 1.4.200 format — a fresh DB is created |
+| bStats | 3.2.1 | 3.2.1 | already latest |
+| Text | Adventure 4.26.1 | **held at 4.26.1** (latest 4.x) | see below |
+
+First-party v52/v57/v61 tiers are untouched (`options.release` stays 17), and the jar stays a clean
+base/v13/v17 Multi-Release with no extra tier. Full build + all 7 gates + tests green (the larger
+dep set needed the daemon heap raised to 6g so jvmdg's shade stays under its internal timeout).
+
+### Held: Adventure 5.x (deferred, not rejected)
+
+Adventure 5.2.0 IS consumable via build-high (jvm.version=21 → jvmdg downgrade) with **zero
+`.java` change** — proven green locally. But 5.x pulls in many more modern-JDK APIs
+(`StringConcatFactory`, `HexFormat`, `RandomGenerator`, `MatchException`, `Locale`…), and jvmdg's
+shim-stub set for them composes **non-deterministically** with the `versions/13` + `versions/21`
+tiers: it passed locally but `verifyJdk8Api` flagged ~17 missing base-tree jvmdg stubs in CI (a
+different environment/ordering surfaced the gap). The `mergeTiers` dedup even reported repeated
+`versions/13` stub entries. Root cause is the three-way tier composition (base v52 / v57 versions-13
+/ v65 versions-21) not producing a complete, deterministic jvmdg-stub closure. Fixing it needs a
+deterministic multi-tier stub-merge (compute the full stub closure per tier and inject it
+explicitly), which is its own build-surgery task. Until then Adventure stays on the latest 4.x line
+(Java-8-native, base tier) — the other four dependencies modernized without it.
+
+---
+
+## Appendix — why the *per-version bundling* framing was rejected
 
 ---
 
