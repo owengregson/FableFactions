@@ -64,9 +64,14 @@ jobs:
           sha256sum FableFactions-*.jar > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create GitHub release
+      # This repo has IMMUTABLE RELEASES enabled: assets cannot be added to a release
+      # after it is published. So create the release as a DRAFT (drafts stay mutable),
+      # attach the jar + checksums to the draft, then publish it in the next step — the
+      # published release is immutable WITH its assets already in place.
+      - name: Create draft release with assets
         uses: softprops/action-gh-release@v3
         with:
+          draft: true
           files: |
             core/build/libs/FableFactions-*.jar
             core/build/libs/SHA256SUMS.txt
@@ -74,6 +79,11 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+      - name: Publish the drafted release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false
 
       # TODO(post-beta): publish to Modrinth once the project page exists.
       # Requires a MODRINTH_TOKEN repository secret; ONE mega-jar covers the
