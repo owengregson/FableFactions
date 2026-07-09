@@ -61,6 +61,20 @@ final class ProtectionSupport {
     }
 
     /**
+     * Whether an UNATTRIBUTABLE explosion may harm a player standing at {@code (worldIdx, chunkKey)}
+     * — the pure location PvP verdict with no attacker: {@link Verdict#ALLOW} in wilderness, a
+     * warzone and pvp-enabled land; a denial in a safezone or a pvp-disabled claim. Environmental
+     * blast sources (end crystal, bed / respawn-anchor, dispenser-ignited TNT) resolve to no player
+     * attacker, so {@link Verdicts#decide} for {@link Action#PVP} — which is location-only save for
+     * the actor's bypass bit — gates the victim's protection on their location alone (ref-engines.md
+     * §3.1.3: safezones and pvp-off land are safe from environmental explosions too).
+     */
+    static boolean environmentalPvpAllowed(KernelSnapshot snap, int worldIdx, long chunkKey) {
+        long actor = environmentActorBits(FactionHandle.WILDERNESS);
+        return Verdict.allowed(Verdicts.decide(snap, actor, worldIdx, chunkKey, Action.PVP));
+    }
+
+    /**
      * The combined combat verdict for {@code attacker} striking {@code victim}: the bypass short
      * circuit, the everywhere-applies friendly-fire flag check (returns {@link Verdict#DENY_FRIENDLY_FIRE}),
      * then the territory PvP decision from {@link Verdicts#decide} at the victim's chunk

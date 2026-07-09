@@ -14,6 +14,7 @@ import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
@@ -37,9 +38,10 @@ import dev.fablemc.factions.kernel.state.KernelSnapshot;
 import dev.fablemc.factions.platform.actor.DamageAttribution;
 
 /**
- * The event-complete grief matrix (D-4, proposal-C §8.1): fire spread / ignite, liquid & dragon-egg
- * flow, piston push/pull (both-ends), non-player block changes, hanging break, structure growth and
- * farmland trample — all at {@code HIGH}/{@code ignoreCancelled=true}, all through
+ * The event-complete grief matrix (D-4, proposal-C §8.1): fire spread / ignite / burn, liquid &
+ * dragon-egg flow, piston push/pull (whole moved set, both ends), non-player block changes, hanging
+ * break, structure growth and farmland trample — all at {@code HIGH}/{@code ignoreCancelled=true},
+ * all through
  * {@code Verdicts.decide}. Every event here is universal at the 1.7.10 floor and every enum constant
  * referenced is floor-present, so this is a BASELINE listener (AM-13 {@code verifyDescriptorFloor}).
  *
@@ -86,6 +88,18 @@ public final class GriefListener implements Listener {
         wildernessGuard(block.getWorld(), chunkOf(block), Action.FIRE_SPREAD, event);
     }
 
+    /**
+     * Stops fire from burning a claim's blocks away when its fire-spread flag is off — the missing
+     * counterpart to {@link #onBlockSpread} / {@link #onBlockIgnite}: the plugin already denies fire
+     * spreading and igniting INTO a claim, but without this a fire lit at the border still consumed
+     * the claimed blocks it touched (D-4). {@code BlockBurnEvent} is floor-present (1.7.10).
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockBurn(BlockBurnEvent event) {
+        Block block = event.getBlock();
+        wildernessGuard(block.getWorld(), chunkOf(block), Action.FIRE_SPREAD, event);
+    }
+
     // ── liquids ──────────────────────────────────────────────────────────────────────────────
 
     /** Blocks liquid / dragon-egg flow across a claim border (D-4). */
@@ -96,11 +110,16 @@ public final class GriefListener implements Listener {
         flowGuard(from.getWorld(), chunkOf(from), chunkOf(to), Action.LIQUID, event);
     }
 
-    /** A player emptying a bucket is build-like at the clicked block (D-4). */
+    /**
+     * A player emptying a bucket is build-like at the block the liquid actually LANDS in — the face
+     * pointed at ({@code getBlockClicked().getRelative(getBlockFace())}), not the clicked block
+     * itself. Deciding on the clicked block let a player in their own/wilderness chunk pour lava or
+     * water across a border into a claim (D-4).
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBucketEmpty(PlayerBucketEmptyEvent event) {
-        Block block = event.getBlockClicked();
-        playerGuard(event.getPlayer(), block.getWorld(), chunkOf(block), Action.LIQUID, event,
+        Block placed = event.getBlockClicked().getRelative(event.getBlockFace());
+        playerGuard(event.getPlayer(), placed.getWorld(), chunkOf(placed), Action.LIQUID, event,
                 ProtectionText.NO_BUILD);
     }
 
@@ -112,25 +131,78 @@ public final class GriefListener implements Listener {
                 ProtectionText.NO_BUILD);
     }
 
-    // ── pistons (both-ends, floor-safe: no getBlocks()) ───────────────────────────────────────
+    // ── pistons (whole moved set, both ends) ──────────────────────────────────────────────────
 
-    /** Blocks a piston in one claim pushing blocks into a foreign claim (D-4). */
+    /**
+     * Blocks a piston pushing blocks across a claim border. Every block in the moved set is checked
+     * at BOTH its source chunk and the chunk it slides INTO — not just the single frontier block, so
+     * a piston sitting 2+ blocks from the border can no longer shove blocks across it (D-4).
+     * {@code BlockPistonExtendEvent#getBlocks()} is floor-present (version-deltas §3.8 — only the
+     * RETRACT event's {@code getBlocks()} is 1.8+), so this stays a baseline handler.
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPistonExtend(BlockPistonExtendEvent event) {
-        pistonGuard(event.getBlock(), event.getDirection(), event);
+        Block piston = event.getBlock();
+        BlockFace direction = event.getDirection();
+        KernelSnapshot snap = ctx.snapshots().current();
+        int worldIdx = ctx.worlds().indexOf(piston.getWorld());
+        long pistonChunk = chunkOf(piston);
+        long actor = ProtectionSupport.environmentActorBits(snap.claimOwnerAt(worldIdx, pistonChunk));
+        // The head itself advances into the frontier even when nothing is pushed.
+        if (pistonCrosses(snap, actor, worldIdx, pistonChunk, chunkOf(piston.getRelative(direction)))) {
+            event.setCancelled(true);
+            return;
+        }
+        List<Block> moved = event.getBlocks();
+        for (int i = 0, n = moved.size(); i < n; i++) {
+            Block block = moved.get(i);
+            if (pistonCrosses(snap, actor, worldIdx, pistonChunk, chunkOf(block))
+                    || pistonCrosses(snap, actor, worldIdx, pistonChunk,
+                            chunkOf(block.getRelative(direction)))) {
+                event.setCancelled(true);
+                return;
+            }
+        }
     }
 
-    /** Blocks a piston in one claim pulling blocks out of a foreign claim (D-4). */
+    /**
+     * Blocks a sticky piston pulling a block across a claim border. The RETRACT event's
+     * {@code getBlocks()} is 1.8+ and {@code NoSuchMethodError}s on the 1.7.10 floor
+     * (version-deltas §3.8), so the single sticky-pulled block is derived geometrically instead —
+     * the block two ahead of the piston returns to one ahead — and both its source and destination
+     * chunk are checked. A non-sticky retract pulls nothing, so it is left alone (D-4).
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPistonRetract(BlockPistonRetractEvent event) {
-        pistonGuard(event.getBlock(), event.getDirection(), event);
+        if (!event.isSticky()) {
+            return; // a non-sticky retract moves no block — nothing to grief
+        }
+        Block piston = event.getBlock();
+        BlockFace direction = event.getDirection();
+        KernelSnapshot snap = ctx.snapshots().current();
+        int worldIdx = ctx.worlds().indexOf(piston.getWorld());
+        long pistonChunk = chunkOf(piston);
+        long actor = ProtectionSupport.environmentActorBits(snap.claimOwnerAt(worldIdx, pistonChunk));
+        long pulledFrom = chunkOf(piston.getRelative(direction, 2));
+        long pulledTo = chunkOf(piston.getRelative(direction, 1));
+        if (pistonCrosses(snap, actor, worldIdx, pistonChunk, pulledFrom)
+                || pistonCrosses(snap, actor, worldIdx, pistonChunk, pulledTo)) {
+            event.setCancelled(true);
+        }
     }
 
-    private void pistonGuard(Block piston, BlockFace direction, Cancellable event) {
-        // Floor-safe both-ends check: compare the piston's chunk to the frontier chunk one block
-        // along the movement axis (getBlocks() is 1.8+ and NoSuchMethodErrors on 1.7.10).
-        Block frontier = piston.getRelative(direction);
-        flowGuard(piston.getWorld(), chunkOf(piston), chunkOf(frontier), Action.PISTON, event);
+    /**
+     * Whether the piston (whose own claim is packed into {@code actor}) may not act at
+     * {@code targetChunk}. A block staying in the piston's own chunk is always fine; otherwise the
+     * decision routes through {@link Verdicts#decide} so within-claim and ally movement is allowed
+     * and movement into a foreign claim is denied — the same border rule liquid flow uses.
+     */
+    private static boolean pistonCrosses(KernelSnapshot snap, long actor, int worldIdx,
+                                         long pistonChunk, long targetChunk) {
+        if (targetChunk == pistonChunk) {
+            return false; // same chunk as the piston body — same owner, always allowed
+        }
+        return !Verdict.allowed(Verdicts.decide(snap, actor, worldIdx, targetChunk, Action.PISTON));
     }
 
     // ── entities / hangings / growth ──────────────────────────────────────────────────────────
@@ -145,9 +217,21 @@ public final class GriefListener implements Listener {
         wildernessGuard(block.getWorld(), chunkOf(block), Action.ENTITY_GRIEF, event);
     }
 
-    /** Physics/explosion hanging break in a claim is entity grief (D-4). */
+    /**
+     * Physics/explosion (non-entity) hanging break in a claim is entity grief (D-4).
+     *
+     * <p>{@code HangingBreakByEntityEvent} is a subclass that inherits this event's {@link
+     * org.bukkit.event.HandlerList}, so an entity-caused break ALSO dispatches to this generic
+     * handler. Its wilderness-actor rule would then wrongly cancel every break inside a claim —
+     * including the owning faction's own members and bypass admins. Those entity-caused breaks are
+     * attributed correctly by {@link #onHangingBreakByEntity}, so bail out here and let that handler
+     * decide them.
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHangingBreak(HangingBreakEvent event) {
+        if (event instanceof HangingBreakByEntityEvent) {
+            return; // decided by onHangingBreakByEntity with proper actor attribution
+        }
         Entity hanging = event.getEntity();
         wildernessGuard(hanging.getWorld(), chunkOf(hanging), Action.ENTITY_GRIEF, event);
     }

@@ -11,6 +11,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.PotionSplashEvent;
 
 import dev.fablemc.factions.core.session.PlayerSession;
@@ -22,8 +24,10 @@ import dev.fablemc.factions.platform.actor.DamageAttribution;
 
 /**
  * Player-vs-player combat protection: direct melee/arrow/TNT/pet damage
- * ({@code EntityDamageByEntityEvent}) and splash-potion harm ({@code PotionSplashEvent}), both at
- * {@code HIGH}/{@code ignoreCancelled=true} (ref-engines.md §3.1.3, proposal-C §8.1). The true
+ * ({@code EntityDamageByEntityEvent}), splash-potion harm ({@code PotionSplashEvent}) and
+ * unattributable explosion damage in no-PvP land ({@code EntityDamageEvent}, see
+ * {@link #onExplosionDamage}), all at {@code HIGH}/{@code ignoreCancelled=true} (ref-engines.md
+ * §3.1.3, proposal-C §8.1). The true
  * attacker behind an indirect source is resolved ONCE through the platform's
  * {@link DamageAttribution} (AM-16) — before every combat verdict — so a proxied hit still attributes
  * to a person, then the decision routes through {@code Verdicts.decide} via {@link ProtectionSupport}.
@@ -72,6 +76,41 @@ public final class CombatProtectionListener implements Listener {
         }
         event.setCancelled(true);
         ctx.messages().to(attacker, denyKey(verdict));
+    }
+
+    /**
+     * Protects a player from UNATTRIBUTABLE explosion damage in no-PvP land. An end crystal, a
+     * bed / respawn-anchor blast in the Nether or End, or dispenser / redstone-ignited TNT resolves
+     * to no player attacker, so {@link #onPvp} (which needs an attacker) skips it and the victim
+     * would take the blast inside a safezone or a pvp-disabled claim. This handler is on the base
+     * {@code EntityDamageEvent} — whose handler list is shared by both the entity-explosion
+     * (by-entity) and block-explosion (by-block) shapes — filters to the two explosion causes, and
+     * when a player attacker IS resolvable defers to {@link #onPvp}. Otherwise it cancels the damage
+     * purely on the victim's location (finding: environmental explosions gate on where the victim
+     * stands). {@code EntityDamageEvent} and the {@code BLOCK_EXPLOSION} / {@code ENTITY_EXPLOSION}
+     * causes are floor-present, so this stays a baseline handler.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onExplosionDamage(EntityDamageEvent event) {
+        DamageCause cause = event.getCause();
+        if (cause != DamageCause.BLOCK_EXPLOSION && cause != DamageCause.ENTITY_EXPLOSION) {
+            return; // only explosion damage
+        }
+        if (!(event.getEntity() instanceof Player victim)) {
+            return; // only player victims
+        }
+        // A player-attributable blast is decided by onPvp's attacker-based verdict — skip it here.
+        if (event instanceof EntityDamageByEntityEvent byEntity
+                && DamageAttribution.resolveAttacker(byEntity.getDamager()) instanceof Player) {
+            return;
+        }
+        KernelSnapshot snap = ctx.snapshots().current();
+        int worldIdx = ctx.worlds().indexOf(victim.getWorld());
+        Location loc = victim.getLocation();
+        long chunkKey = ChunkKeys.fromBlock(loc.getBlockX(), loc.getBlockZ());
+        if (!ProtectionSupport.environmentalPvpAllowed(snap, worldIdx, chunkKey)) {
+            event.setCancelled(true);
+        }
     }
 
     /** Nullifies a splash potion's effect on each protected victim (ref-engines.md §3.1.3, D-4). */
