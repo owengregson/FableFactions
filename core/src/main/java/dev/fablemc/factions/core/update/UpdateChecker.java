@@ -95,9 +95,16 @@ public final class UpdateChecker {
         status = new UpdateStatus(available, currentVersion, resolved.version(),
                 resolved.downloadUrl(), resolved.source());
         if (available) {
+            // resolved.version()/downloadUrl() come from the remote update endpoint — neutralize any
+            // CR/LF so a hostile response can't forge extra log lines (log injection).
             logger.info("A FableFactions update is available: " + currentVersion + " -> "
-                    + resolved.version() + " (" + resolved.downloadUrl() + ")");
+                    + oneLine(resolved.version()) + " (" + oneLine(resolved.downloadUrl()) + ")");
         }
+    }
+
+    /** Collapses CR/LF to spaces so a remote-supplied value can't forge extra log lines. */
+    private static String oneLine(String value) {
+        return value == null ? "" : value.replace('\r', ' ').replace('\n', ' ');
     }
 
     private Resolved fetchModrinth() {

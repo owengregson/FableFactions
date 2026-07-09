@@ -55,10 +55,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # security-extended adds the higher-recall security queries on top of the
-          # default suite — appropriate for a plugin whose worst bugs are economy/item
-          # dupes and state-corruption paths.
-          queries: security-extended
+          # Centralized config: security-extended query suite + scope to shipped
+          # production code (test SQL fixtures are trusted, not a vuln surface).
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

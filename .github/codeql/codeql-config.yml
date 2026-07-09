@@ -1,0 +1,15 @@
+# CodeQL analysis config (referenced by .github/workflows/codeql.yml).
+name: FableFactions CodeQL
+
+# Scope the scan to shipped production code. Test sources build SQL from hardcoded,
+# in-test fixture values (never untrusted input), so java/concatenated-sql-query on
+# them is noise, not a vulnerability — and test code is never in the released jar.
+paths-ignore:
+  - '**/src/test/**'
+  - 'probe/**'          # the live-matrix self-test plugin, not shipped to users
+  - 'scripts/**'        # build-time tooling (the JDK-8 gate, floor-symbol dumper)
+
+# Higher-recall security queries for the dupe/state-corruption bug class this plugin
+# most cares about (same suite the workflow requested inline; centralized here now).
+queries:
+  - uses: security-extended

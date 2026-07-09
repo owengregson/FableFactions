@@ -238,7 +238,7 @@ public final class TeleportSaga implements Travel {
         private final int startX;
         private final int startY;
         private final int startZ;
-        private int elapsedTicks;
+        private long elapsedTicks;   // long: += CHECK_PERIOD_TICKS (long) with no narrowing cast
         private boolean settled;   // single-shot: the pre-teleport money outcome has been decided
 
         Warmup(Player player, PlayerSession session, Location dest, MessageKey doneKey,

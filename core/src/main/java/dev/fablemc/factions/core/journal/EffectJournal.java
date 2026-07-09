@@ -169,27 +169,33 @@ public final class EffectJournal implements EffectSink, AutoCloseable {
     /** Forces the current segment and advances {@link #syncedSeq} to {@code target}, then acks. */
     private void forceTo(long target) {
         syncLock.lock();
+        boolean flushed = false;
         try {
             FileChannel ch = channel;
             if (ch != null && ch.isOpen()) {
                 ch.force(true);
             }
+            flushed = true;
         } catch (ClosedChannelException rolled) {
             // A roll closed this segment after forcing it; the current channel holds the rest. The
-            // next scheduled sync (or the roll's own force) covers target — safe to fall through.
+            // next scheduled sync (or the roll's own force) covers target — safe to treat as flushed.
+            flushed = true;
         } catch (IOException ex) {
-            syncLock.unlock();
             throw new UncheckedIOException("journal fsync failed", ex);
-        }
-        // advance the watermark only for what was actually flushed under the lock
-        long prev;
-        do {
-            prev = syncedSeq.get();
-            if (prev >= target) {
-                break;
+        } finally {
+            // Advance the watermark ONLY for what was actually flushed (never on an fsync failure —
+            // that would claim durability that did not happen), and ALWAYS release the lock.
+            if (flushed) {
+                long prev;
+                do {
+                    prev = syncedSeq.get();
+                    if (prev >= target) {
+                        break;
+                    }
+                } while (!syncedSeq.compareAndSet(prev, target));
             }
-        } while (!syncedSeq.compareAndSet(prev, target));
-        syncLock.unlock();
+            syncLock.unlock();
+        }
         if (ack != null) {
             ack.onFsynced(target);
         }

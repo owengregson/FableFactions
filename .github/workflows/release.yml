@@ -44,7 +44,7 @@ jobs:
           java-version: 25
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           # A tag ref is never main; read the cache main populated.
           cache-read-only: true
@@ -69,7 +69,7 @@ jobs:
       # attach the jar + checksums to the draft, then publish it in the next step — the
       # published release is immutable WITH its assets already in place.
       - name: Create draft release with assets
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           draft: true
           files: |
