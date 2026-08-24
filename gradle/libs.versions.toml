@@ -14,7 +14,7 @@ adventure = "5.2.0"
 commons-dbcp2 = "2.14.0"
 commons-pool2 = "2.13.1"
 hsqldb = "2.7.4"
-mysql = "9.7.0"
+mysql = "26.7.0"
 
 bstats = "3.2.1"
 # compileOnly soft-dep only, never shaded: the typed FableExpansion supertype.
