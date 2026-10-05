@@ -52,7 +52,7 @@ jobs:
       # main writes the Gradle cache, PRs only read it: no cache poisoning from
       # forks, no eviction churn from short-lived branches.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
@@ -113,4 +113,4 @@ jobs:
           java-version: 25
 
       - name: Generate and submit dependency graph
-        uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
